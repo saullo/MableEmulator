@@ -1,0 +1,74 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "linux-base",
+            "generator": "Ninja",
+            "hidden": true,
+            "binaryDir": "${sourceDir}/Binary/Build/${presetName}",
+            "installDir": "${sourceDir}/Binary/Install/${presetName}",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++"
+            }
+        },
+        {
+            "name": "x86-Debug",
+            "displayName": "x86 Debug",
+            "inherits": "linux-base",
+            "architecture": {
+                "value": "x86",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "x86-Release",
+            "displayName": "x86 Release",
+            "inherits": "x86-Debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "x64-Debug",
+            "displayName": "x64 Debug",
+            "inherits": "linux-base",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "x64-Release",
+            "displayName": "x64 Debug",
+            "inherits": "x64-Debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "x86-Debug",
+            "configurePreset": "x86-Debug"
+        },
+        {
+            "name": "x86-Release",
+            "configurePreset": "x86-Release"
+        },
+        {
+            "name": "x64-Debug",
+            "configurePreset": "x64-Debug"
+        },
+        {
+            "name": "x64-Release",
+            "configurePreset": "x64-Release"
+        }
+    ]
+}
