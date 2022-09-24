@@ -15,8 +15,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include <Authentication/Log.hpp>
 #include <Authentication/Session.hpp>
+#include <Utilities/Log.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
 #include <boost/asio/signal_set.hpp>
@@ -38,7 +38,7 @@ int main()
 {
     try
     {
-        spdlog::set_level(spdlog::level::debug);
+        Utilities::Log::init();
         boost::asio::io_context io_context(1);
         boost::asio::co_spawn(io_context,
                               listener(boost::asio::ip::tcp::acceptor(io_context, {boost::asio::ip::tcp::v4(), 3724})),
