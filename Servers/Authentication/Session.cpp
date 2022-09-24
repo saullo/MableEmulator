@@ -47,17 +47,17 @@ namespace Authentication
     {
         try
         {
-            std::vector<std::uint8_t> buffer;
-            buffer.resize(1024);
-
             while (true)
             {
-                auto length =
-                    co_await m_socket.async_read_some(boost::asio::buffer(buffer), boost::asio::use_awaitable);
-                LOG_DEBUG("Message length = {}", length);
+                m_read_buffer.normalize();
+                m_read_buffer.ensure_free_space();
 
-                m_queue.push_back(buffer);
-                m_timer.cancel_one();
+                auto length = co_await m_socket.async_read_some(
+                    boost::asio::buffer(m_read_buffer.write_ptr(), m_read_buffer.remaining_size()),
+                    boost::asio::use_awaitable);
+
+                m_read_buffer.write_completed(length);
+                read_handler();
             }
         }
         catch (const std::exception &e)
@@ -73,16 +73,22 @@ namespace Authentication
         {
             while (m_socket.is_open())
             {
-                if (m_queue.empty())
+                if (m_write_queue.empty())
                 {
                     boost::system::error_code error;
                     co_await m_timer.async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, error));
                 }
                 else
                 {
-                    auto message = m_queue.front();
-                    co_await m_socket.async_write_some(boost::asio::buffer(message), boost::asio::use_awaitable);
-                    m_queue.pop_front();
+                    auto &message = m_write_queue.front();
+                    auto message_size = message.active_size();
+                    auto length = co_await m_socket.async_write_some(
+                        boost::asio::buffer(message.read_ptr(), message_size), boost::asio::use_awaitable);
+
+                    if (message_size < length)
+                        message.read_completed(length);
+
+                    m_write_queue.pop();
                 }
             }
         }
@@ -97,5 +103,83 @@ namespace Authentication
     {
         m_socket.close();
         m_timer.cancel();
+    }
+
+    void Session::read_handler()
+    {
+        Handler command_handlers[] = {{cmd_auth_logon_challenge, 4, &Session::logon_challenge_handler}};
+        auto handlers_size = sizeof(command_handlers) / sizeof(Handler);
+
+        auto &read_buffer = m_read_buffer;
+        while (read_buffer.active_size())
+        {
+            Handler handler;
+            std::size_t i;
+            auto command = read_buffer.read_ptr()[0];
+            for (i = 0; i < handlers_size; i++)
+            {
+                handler = command_handlers[i];
+                if (handler.command == command)
+                    break;
+            }
+
+            if (i == handlers_size)
+            {
+                read_buffer.reset();
+                LOG_DEBUG("Received invalid command = {}", command);
+                return;
+            }
+
+            auto size = std::uint16_t(handler.size);
+            if (command == cmd_auth_logon_challenge)
+            {
+                auto challenge = reinterpret_cast<cmd_auth_logon_challenge_client_t *>(read_buffer.read_ptr());
+                size += challenge->size;
+                if (size > sizeof(cmd_auth_logon_challenge_client_t) + 16)
+                {
+                    stop();
+                    return;
+                }
+            }
+
+            if (read_buffer.active_size() < size)
+                break;
+
+            if (!(*this.*handler.handler)())
+            {
+                LOG_DEBUG("Command handler failed, command = {}", command);
+                stop();
+                return;
+            }
+
+            read_buffer.read_completed(size);
+        }
+    }
+
+    bool Session::logon_challenge_handler()
+    {
+        Utilities::ByteBuffer buffer;
+        buffer << cmd_auth_logon_challenge;
+        buffer << std::uint8_t(0x00);
+        buffer << login_unknown_account;
+        send_packet(buffer);
+
+        return true;
+    }
+
+    void Session::send_packet(Utilities::ByteBuffer &packet)
+    {
+        if (packet.empty())
+            return;
+
+        Utilities::MessageBuffer buffer(packet.size());
+        buffer.write(packet.data(), packet.size());
+        queue_packet(std::move(buffer));
+    }
+
+    void Session::queue_packet(Utilities::MessageBuffer &&packet)
+    {
+        m_write_queue.push(std::move(packet));
+        m_timer.cancel_one();
     }
 } // namespace Authentication
