@@ -15,113 +15,21 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include <boost/asio/awaitable.hpp>
+#include <Authentication/Log.hpp>
+#include <Authentication/Session.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
-#include <boost/asio/io_context.hpp>
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/redirect_error.hpp>
 #include <boost/asio/signal_set.hpp>
-#include <boost/asio/steady_timer.hpp>
-#include <chrono>
-#include <deque>
-#include <iostream>
-#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
-#include <spdlog/spdlog.h>
-
-class Session : public std::enable_shared_from_this<Session>
-{
-public:
-    Session(boost::asio::ip::tcp::socket socket) : m_socket(std::move(socket)), m_timer(m_socket.get_executor())
-    {
-        m_timer.expires_at(std::chrono::steady_clock::time_point::max());
-    }
-
-    void start()
-    {
-        auto endpoint = m_socket.remote_endpoint();
-        SPDLOG_DEBUG("Connected: {}:{}", endpoint.address().to_string(), endpoint.port());
-
-        boost::asio::co_spawn(
-            m_socket.get_executor(), [self = this->shared_from_this()] { return self->reader(); },
-            boost::asio::detached);
-
-        boost::asio::co_spawn(
-            m_socket.get_executor(), [self = this->shared_from_this()] { return self->writer(); },
-            boost::asio::detached);
-    }
-
-private:
-    boost::asio::ip::tcp::socket m_socket;
-    boost::asio::steady_timer m_timer;
-    std::deque<std::vector<std::uint8_t>> m_queue;
-
-    boost::asio::awaitable<void> reader()
-    {
-        try
-        {
-            std::vector<std::uint8_t> buffer;
-            buffer.resize(1024);
-
-            while (true)
-            {
-                auto length =
-                    co_await m_socket.async_read_some(boost::asio::buffer(buffer), boost::asio::use_awaitable);
-                SPDLOG_DEBUG("Message length = {}", length);
-                std::cout << std::endl;
-
-                m_queue.push_back(buffer);
-                m_timer.cancel_one();
-            }
-        }
-        catch (const std::exception &e)
-        {
-            SPDLOG_CRITICAL("Unhandled reader exception - {}", e.what());
-            stop();
-        }
-    }
-
-    boost::asio::awaitable<void> writer()
-    {
-        try
-        {
-            while (m_socket.is_open())
-            {
-                if (m_queue.empty())
-                {
-                    boost::system::error_code error;
-                    co_await m_timer.async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, error));
-                }
-                else
-                {
-                    auto message = m_queue.front();
-                    co_await m_socket.async_write_some(boost::asio::buffer(message), boost::asio::use_awaitable);
-                    m_queue.pop_front();
-                }
-            }
-        }
-        catch (const std::exception &e)
-        {
-            SPDLOG_CRITICAL("Unhandled writer exception - {}", e.what());
-            stop();
-        }
-    }
-
-    void stop()
-    {
-        m_socket.close();
-        m_timer.cancel();
-    }
-};
 
 boost::asio::awaitable<void> listener(boost::asio::ip::tcp::acceptor acceptor)
 {
     auto endpoint = acceptor.local_endpoint();
-    SPDLOG_INFO("Listening: {}:{}", endpoint.address().to_string(), endpoint.port());
+    LOG_INFO("Listening: {}:{}", endpoint.address().to_string(), endpoint.port());
 
     while (true)
     {
-        auto session = std::make_shared<Session>(co_await acceptor.async_accept(boost::asio::use_awaitable));
+        auto session =
+            std::make_shared<Authentication::Session>(co_await acceptor.async_accept(boost::asio::use_awaitable));
         session->start();
     }
 }
@@ -141,7 +49,7 @@ int main()
     }
     catch (const std::exception &e)
     {
-        SPDLOG_CRITICAL("Unhandled standard exception - {}", e.what());
+        LOG_CRITICAL("Unhandled standard exception - {}", e.what());
         return EXIT_FAILURE;
     }
     return EXIT_SUCCESS;

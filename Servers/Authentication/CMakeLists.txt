@@ -1,5 +1,6 @@
 set(SOURCES
-    Main.cpp)
+    Main.cpp
+    Session.cpp)
 
 add_executable(AuthenticationServer ${SOURCES})
 
