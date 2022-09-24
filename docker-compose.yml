@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  mysql:
+    image: mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./Binary/Database:/var/lib/mysql
+      - ./Database/CreateDatabase.sql:/docker-entrypoint-initdb.d/01_create_database.sql
+      - ./Database/CreateAuthDatabase.sql://docker-entrypoint-initdb.d/02_create_auth_database.sql
+
+  adminer:
+    image: adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mysql
