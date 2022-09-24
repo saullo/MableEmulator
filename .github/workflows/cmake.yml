@@ -1,0 +1,26 @@
+name: CMake
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ${{matrix.os}}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        arch: [x86, x64]
+        type: [Debug, Release]
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y cmake ninja-build libboost-all-dev libspdlog-dev
+
+    - name: Configure CMake
+      run: cmake --preset ${{matrix.arch}}-${{matrix.type}}
+
+    - name: Build
+      run: cmake --build --preset ${{matrix.arch}}-${{matrix.type}} --target all
