@@ -1,5 +1,7 @@
 set(SOURCES
-    Log.cpp)
+    Log.cpp
+    ByteBuffer.cpp
+    MessageBuffer.cpp)
 
 add_library(Utilities ${SOURCES})
 
