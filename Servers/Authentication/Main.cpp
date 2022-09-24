@@ -26,6 +26,8 @@
 #include <chrono>
 #include <deque>
 #include <iostream>
+#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+#include <spdlog/spdlog.h>
 
 class Session : public std::enable_shared_from_this<Session>
 {
@@ -38,7 +40,7 @@ public:
     void start()
     {
         auto endpoint = m_socket.remote_endpoint();
-        std::cout << "Connected: " << endpoint.address().to_string() << ":" << endpoint.port() << "" << std::endl;
+        SPDLOG_DEBUG("Connected: {}:{}", endpoint.address().to_string(), endpoint.port());
 
         boost::asio::co_spawn(
             m_socket.get_executor(), [self = this->shared_from_this()] { return self->reader(); },
@@ -59,15 +61,13 @@ private:
         try
         {
             std::vector<std::uint8_t> buffer;
-            buffer.resize(4096);
+            buffer.resize(1024);
 
             while (true)
             {
                 auto length =
                     co_await m_socket.async_read_some(boost::asio::buffer(buffer), boost::asio::use_awaitable);
-                std::cout << "Message length = " << length << ", data:" << std::endl;
-                for (auto byte : buffer)
-                    std::cout << byte << std::flush;
+                SPDLOG_DEBUG("Message length = {}", length);
                 std::cout << std::endl;
 
                 m_queue.push_back(buffer);
@@ -76,7 +76,7 @@ private:
         }
         catch (const std::exception &e)
         {
-            std::cerr << "Unhandled reader exception - " << e.what() << std::endl;
+            SPDLOG_CRITICAL("Unhandled reader exception - {}", e.what());
             stop();
         }
     }
@@ -102,7 +102,7 @@ private:
         }
         catch (const std::exception &e)
         {
-            std::cerr << "Unhandled writer exception - " << e.what() << std::endl;
+            SPDLOG_CRITICAL("Unhandled writer exception - {}", e.what());
             stop();
         }
     }
@@ -117,7 +117,7 @@ private:
 boost::asio::awaitable<void> listener(boost::asio::ip::tcp::acceptor acceptor)
 {
     auto endpoint = acceptor.local_endpoint();
-    std::cout << "Listening: " << endpoint.address().to_string() << ":" << endpoint.port() << "" << std::endl;
+    SPDLOG_INFO("Listening: {}:{}", endpoint.address().to_string(), endpoint.port());
 
     while (true)
     {
@@ -130,6 +130,7 @@ int main()
 {
     try
     {
+        spdlog::set_level(spdlog::level::debug);
         boost::asio::io_context io_context(1);
         boost::asio::co_spawn(io_context,
                               listener(boost::asio::ip::tcp::acceptor(io_context, {boost::asio::ip::tcp::v4(), 3724})),
@@ -140,7 +141,7 @@ int main()
     }
     catch (const std::exception &e)
     {
-        std::cerr << "Unhandled standard exception - " << e.what() << std::endl;
+        SPDLOG_CRITICAL("Unhandled standard exception - {}", e.what());
         return EXIT_FAILURE;
     }
     return EXIT_SUCCESS;
