@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include <Authentication/Session.hpp>
+#include <Database/AuthDatabase.hpp>
 #include <Utilities/Log.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
@@ -107,7 +108,8 @@ namespace Authentication
 
     void Session::read_handler()
     {
-        Handler command_handlers[] = {{cmd_auth_logon_challenge, 4, &Session::logon_challenge_handler}};
+        Handler command_handlers[] = {
+            {cmd_auth_logon_challenge, logon_challenge_initial_size, &Session::logon_challenge_handler}};
         auto handlers_size = sizeof(command_handlers) / sizeof(Handler);
 
         auto &read_buffer = m_read_buffer;
@@ -158,13 +160,51 @@ namespace Authentication
 
     bool Session::logon_challenge_handler()
     {
+        auto challenge = reinterpret_cast<cmd_auth_logon_challenge_client_t *>(m_read_buffer.read_ptr());
+        if (challenge->size - (sizeof(cmd_auth_logon_challenge_client_t) - logon_challenge_initial_size - 1) !=
+            challenge->account_name_length)
+            return false;
+
         Utilities::ByteBuffer buffer;
         buffer << cmd_auth_logon_challenge;
         buffer << std::uint8_t(0x00);
-        buffer << login_unknown_account;
+
+        if (build_is_valid(challenge->build))
+        {
+            buffer << login_unknown_account;
+        }
+        else
+            buffer << login_version_invalid;
+
         send_packet(buffer);
 
         return true;
+    }
+
+    bool Session::build_is_valid(std::uint16_t build_number)
+    {
+        std::vector<BuildInformation> builds;
+
+        if (auto query = Database::AuthDatabase::instance()->query(
+                "SELECT build, major, minor, revision FROM build_information"))
+        {
+            do
+            {
+                auto fields = query->fetch();
+                auto &build = builds.emplace_back();
+                build.build = fields[0].get_uint32();
+                build.major = fields[1].get_uint32();
+                build.minor = fields[2].get_uint32();
+                build.revision = fields[3].get_uint32();
+            } while (query->next_row());
+        }
+
+        for (const auto &build : builds)
+        {
+            if (build.build == build_number)
+                return true;
+        }
+        return false;
     }
 
     void Session::send_packet(Utilities::ByteBuffer &packet)

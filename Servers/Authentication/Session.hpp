@@ -35,6 +35,8 @@ namespace Authentication
         void start();
 
     private:
+        static constexpr auto logon_challenge_initial_size = 4;
+
         enum Command : std::uint8_t
         {
             cmd_auth_logon_challenge = 0x00
@@ -44,6 +46,7 @@ namespace Authentication
         {
             login_ok = 0x00,
             login_unknown_account = 0x04,
+            login_version_invalid = 0x09,
         };
 
         struct Handler
@@ -51,6 +54,14 @@ namespace Authentication
             Command command;
             std::size_t size;
             bool (Session::*handler)();
+        };
+
+        struct BuildInformation
+        {
+            std::uint32_t build;
+            std::uint32_t major;
+            std::uint32_t minor;
+            std::uint32_t revision;
         };
 
 #pragma pack(push, 1)
@@ -82,9 +93,9 @@ namespace Authentication
         void stop();
         boost::asio::awaitable<void> reader();
         boost::asio::awaitable<void> writer();
-
         void read_handler();
         bool logon_challenge_handler();
+        bool build_is_valid(std::uint16_t build);
         void send_packet(Utilities::ByteBuffer &packet);
         void queue_packet(Utilities::MessageBuffer &&packet);
     };

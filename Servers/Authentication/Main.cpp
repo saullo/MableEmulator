@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include <Authentication/Session.hpp>
+#include <Database/AuthDatabase.hpp>
 #include <Utilities/Log.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
@@ -38,6 +39,9 @@ int main()
 {
     try
     {
+        auto auth_database = Database::AuthDatabase::instance();
+        auth_database->open();
+
         Utilities::Log::init();
         boost::asio::io_context io_context(1);
         boost::asio::co_spawn(io_context,
@@ -46,6 +50,8 @@ int main()
         boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
         signals.async_wait([&](auto, auto) { io_context.stop(); });
         io_context.run();
+
+        auth_database->close();
     }
     catch (const std::exception &e)
     {
