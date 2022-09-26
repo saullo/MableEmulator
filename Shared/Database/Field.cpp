@@ -16,7 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include <Database/Field.hpp>
+#include <cassert>
 #include <cstdlib>
+#include <cstring>
 
 namespace Database
 {
@@ -30,6 +32,25 @@ namespace Database
         return static_cast<std::uint32_t>(std::strtoul(m_data.value, nullptr, 10));
     }
 
+    std::string Field::get_string() const
+    {
+        if (!m_data.value)
+            return "";
+
+        auto string = get_c_string();
+        if (!string)
+            return "";
+
+        return std::string(string, m_data.length);
+    }
+
+    const char *Field::get_c_string() const
+    {
+        if (!m_data.value)
+            return nullptr;
+        return static_cast<const char *>(m_data.value);
+    }
+
     void Field::set_data(const char *value, std::uint32_t length)
     {
         m_data.value = value;
@@ -38,4 +59,10 @@ namespace Database
     }
 
     void Field::set_metadata(const QueryResultField *metadata) { m_metadata = metadata; }
+
+    void Field::get_binary_sized(std::uint8_t *buffer, std::size_t length) const
+    {
+        assert(m_data.value && (m_data.length == length));
+        std::memcpy(buffer, m_data.value, length);
+    }
 } // namespace Database

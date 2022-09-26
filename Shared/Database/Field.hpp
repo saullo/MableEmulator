@@ -18,7 +18,9 @@
 #pragma once
 
 #include <Database/QueryResultField.hpp>
+#include <array>
 #include <cstdint>
+#include <string>
 
 namespace Database
 {
@@ -29,6 +31,15 @@ namespace Database
 
     public:
         std::uint32_t get_uint32();
+        std::string get_string() const;
+        const char *get_c_string() const;
+
+        template <std::size_t Size> std::array<std::uint8_t, Size> get_binary() const
+        {
+            std::array<std::uint8_t, Size> buffer;
+            get_binary_sized(buffer.data(), Size);
+            return buffer;
+        }
 
     protected:
         void set_data(const char *value, std::uint32_t length);
@@ -43,5 +54,7 @@ namespace Database
         } m_data{};
 
         const QueryResultField *m_metadata;
+
+        void get_binary_sized(std::uint8_t *buffer, std::size_t length) const;
     };
 } // namespace Database
