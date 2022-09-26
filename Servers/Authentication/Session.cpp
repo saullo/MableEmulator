@@ -24,6 +24,9 @@
 
 namespace Authentication
 {
+    std::array<std::uint8_t, 16> Session::version_challenge = {
+        {0xBA, 0xA3, 0x1E, 0x99, 0xA0, 0x0B, 0x21, 0x57, 0xFC, 0x37, 0x3F, 0xB3, 0x69, 0xCD, 0xD2, 0xF1}};
+
     Session::Session(boost::asio::ip::tcp::socket socket)
         : m_socket(std::move(socket)), m_timer(m_socket.get_executor())
     {
@@ -169,15 +172,46 @@ namespace Authentication
         buffer << cmd_auth_logon_challenge;
         buffer << std::uint8_t(0x00);
 
-        if (build_is_valid(challenge->build))
+        if (!build_is_valid(challenge->build))
+        {
+            buffer << login_version_invalid;
+            send_packet(buffer);
+            return false;
+        }
+
+        auto username =
+            std::string(reinterpret_cast<const char *>(challenge->account_name), challenge->account_name_length);
+        auto account_query_sql =
+            fmt::format("SELECT username, salt, verifier FROM account WHERE username = '{}';", username);
+        auto account_query = Database::AuthDatabase::instance()->query(account_query_sql.c_str());
+        if (!account_query)
         {
             buffer << login_unknown_account;
+            send_packet(buffer);
+            return false;
         }
-        else
-            buffer << login_version_invalid;
+
+        account_query->next_row();
+        auto fields = account_query->fetch();
+
+        m_srp6.emplace(fields[0].get_string(), fields[1].get_binary<Crypto::Srp6::salt_length>(),
+                       fields[2].get_binary<Crypto::Srp6::verifier_length>());
+
+        buffer << login_ok;
+        buffer.append(m_srp6->B);
+        buffer << std::uint8_t(1);
+        buffer.append(m_srp6->g);
+        buffer << std::uint8_t(32);
+        buffer.append(m_srp6->N);
+        buffer.append(m_srp6->s);
+        buffer.append(version_challenge.data(), version_challenge.size());
+        buffer << std::uint8_t(0x00);
+
+        auto endpoint = m_socket.remote_endpoint();
+        LOG_DEBUG("Successfully logged account username = {}, address = {}:{}", username,
+                  endpoint.address().to_string(), endpoint.port());
 
         send_packet(buffer);
-
         return true;
     }
 

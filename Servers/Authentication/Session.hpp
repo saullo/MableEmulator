@@ -17,12 +17,14 @@
  */
 #pragma once
 
+#include <Crypto/Srp6.hpp>
 #include <Utilities/ByteBuffer.hpp>
 #include <Utilities/MessageBuffer.hpp>
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <memory>
+#include <optional>
 #include <queue>
 
 namespace Authentication
@@ -36,6 +38,7 @@ namespace Authentication
 
     private:
         static constexpr auto logon_challenge_initial_size = 4;
+        static std::array<std::uint8_t, 16> version_challenge;
 
         enum Command : std::uint8_t
         {
@@ -89,6 +92,7 @@ namespace Authentication
         boost::asio::ip::tcp::socket m_socket;
         boost::asio::steady_timer m_timer;
         std::queue<Utilities::MessageBuffer> m_write_queue;
+        std::optional<Crypto::Srp6> m_srp6;
 
         void stop();
         boost::asio::awaitable<void> reader();
