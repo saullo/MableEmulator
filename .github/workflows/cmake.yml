@@ -17,7 +17,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install -y cmake ninja-build libboost-all-dev libspdlog-dev
+        sudo apt install -y cmake ninja-build libboost-all-dev libspdlog-dev mysql-server mysql-client
 
     - name: Configure CMake
       run: cmake --preset ${{matrix.arch}}-${{matrix.type}}
