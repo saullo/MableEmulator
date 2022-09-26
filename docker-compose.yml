@@ -8,8 +8,9 @@ services:
       - "3306:3306"
     volumes:
       - ./Binary/Database:/var/lib/mysql
-      - ./Database/CreateDatabase.sql:/docker-entrypoint-initdb.d/01_create_database.sql
-      - ./Database/CreateAuthDatabase.sql://docker-entrypoint-initdb.d/02_create_auth_database.sql
+      - ./Database/Create/Databases.sql:/docker-entrypoint-initdb.d/01_create_database.sql
+      - ./Database/Create/AuthDatabase.sql:/docker-entrypoint-initdb.d/02_create_auth_database.sql
+      - ./Database/Populate/AuthDatabase.sql:/docker-entrypoint-initdb.d/03_populate_auth_database.sql
 
   adminer:
     image: adminer

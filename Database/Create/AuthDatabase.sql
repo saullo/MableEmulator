@@ -11,3 +11,12 @@ CREATE TABLE `account` (
     UNIQUE KEY `index_username` (`username`),
     UNIQUE KEY `index_email` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+DROP TABLE IF EXISTS `build_information`;
+CREATE TABLE `build_information` (
+    `build` INT NOT NULL,
+    `major` INT DEFAULT NULL,
+    `minor` INT DEFAULT NULL,
+    `revision` INT DEFAULT NULL,
+    PRIMARY KEY (`build`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
