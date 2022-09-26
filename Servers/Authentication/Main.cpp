@@ -21,6 +21,12 @@
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
 #include <boost/asio/signal_set.hpp>
+#include <openssl/provider.h>
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+OSSL_PROVIDER *LegacyProvider;
+OSSL_PROVIDER *DefaultProvider;
+#endif
 
 boost::asio::awaitable<void> listener(boost::asio::ip::tcp::acceptor acceptor)
 {
@@ -39,6 +45,11 @@ int main()
 {
     try
     {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        LegacyProvider = OSSL_PROVIDER_load(nullptr, "legacy");
+        DefaultProvider = OSSL_PROVIDER_load(nullptr, "default");
+#endif
+
         auto auth_database = Database::AuthDatabase::instance();
         auth_database->open();
 
@@ -52,6 +63,11 @@ int main()
         io_context.run();
 
         auth_database->close();
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        OSSL_PROVIDER_unload(LegacyProvider);
+        OSSL_PROVIDER_unload(DefaultProvider);
+#endif
     }
     catch (const std::exception &e)
     {
