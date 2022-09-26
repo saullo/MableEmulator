@@ -180,4 +180,5 @@ namespace Crypto
         return result <<= number;
     }
 
+    bool BigNumber::is_zero() const { return BN_is_zero(m_bn); }
 } // namespace Crypto

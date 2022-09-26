@@ -49,6 +49,8 @@ namespace Crypto
             return result;
         }
 
+        bool is_zero() const;
+
         BigNumber &operator=(BigNumber const &bn);
         BigNumber &operator+=(const BigNumber &bn);
         BigNumber operator+(const BigNumber &bn) const;
