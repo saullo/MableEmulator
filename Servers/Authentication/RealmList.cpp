@@ -38,7 +38,7 @@ namespace Authentication
         init_realms();
     }
 
-    const RealmList::BuildInformation *RealmList::build_info(std::uint32_t build_number)
+    const RealmList::BuildInformation *RealmList::build_info(std::uint32_t build_number) const
     {
         for (const auto &build : m_builds)
         {
@@ -129,8 +129,8 @@ namespace Authentication
                 realm.population = population;
                 realm.build = build;
 
-                LOG_DEBUG("Added realm name = {}, type = {}, flags = {}, population = {}, category = {}", realm.name,
-                          realm.type, realm.flags, realm.population, realm.category);
+                LOG_DEBUG("Added realm id = {}, name = {}, type = {}, flags = {}, population = {}, category = {}",
+                          realm.id, realm.name, realm.type, realm.flags, realm.population, realm.category);
             } while (query->next_row());
         }
     }
