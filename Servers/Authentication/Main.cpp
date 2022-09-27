@@ -16,11 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include <Authentication/Session.hpp>
+#include <Authentication/SessionManager.hpp>
 #include <Database/AuthDatabase.hpp>
 #include <Realm/RealmList.hpp>
 #include <Utilities/Log.hpp>
-#include <boost/asio/co_spawn.hpp>
-#include <boost/asio/detached.hpp>
 #include <boost/asio/signal_set.hpp>
 #include <openssl/provider.h>
 
@@ -28,19 +27,6 @@
 OSSL_PROVIDER *LegacyProvider;
 OSSL_PROVIDER *DefaultProvider;
 #endif
-
-boost::asio::awaitable<void> listener(boost::asio::ip::tcp::acceptor acceptor)
-{
-    auto endpoint = acceptor.local_endpoint();
-    LOG_INFO("Listening: {}:{}", endpoint.address().to_string(), endpoint.port());
-
-    while (true)
-    {
-        auto session =
-            std::make_shared<Authentication::Session>(co_await acceptor.async_accept(boost::asio::use_awaitable));
-        session->start();
-    }
-}
 
 int main()
 {
@@ -56,18 +42,24 @@ int main()
         auto auth_database = Database::AuthDatabase::instance();
         auth_database->open();
 
-        boost::asio::io_context io_context(1);
+        auto io_context = std::make_shared<boost::asio::io_context>();
 
         auto realm_list = Realm::RealmList::instance();
-        realm_list->init(io_context);
+        realm_list->init(*io_context);
 
-        boost::asio::co_spawn(io_context,
-                              listener(boost::asio::ip::tcp::acceptor(io_context, {boost::asio::ip::tcp::v4(), 3724})),
-                              boost::asio::detached);
-        boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
-        signals.async_wait([&](auto, auto) { io_context.stop(); });
-        io_context.run();
+        auto session_manager = Authentication::SessionManager::instance();
+        if (!session_manager->init(*io_context, "0.0.0.0", 3724, 1))
+        {
+            LOG_CRITICAL("Unable to initialize session manager");
+            return EXIT_FAILURE;
+        }
 
+        boost::asio::signal_set signals(*io_context, SIGINT, SIGTERM);
+        signals.async_wait([io_context](const boost::system::error_code &error, int signal) { io_context->stop(); });
+
+        io_context->run();
+
+        signals.cancel();
         auth_database->close();
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L

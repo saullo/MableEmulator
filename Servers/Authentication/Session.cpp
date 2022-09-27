@@ -27,7 +27,11 @@ namespace Authentication
 
     Session::Session(boost::asio::ip::tcp::socket socket) : Socket(std::move(socket)) {}
 
-    void Session::on_start() { LOG_DEBUG("Connected: {}:{}", remote_address().to_string(), remote_port()); }
+    void Session::on_start()
+    {
+        LOG_DEBUG("Connected: {}:{}", remote_address().to_string(), remote_port());
+        async_read();
+    }
 
     void Session::on_read()
     {
@@ -83,6 +87,8 @@ namespace Authentication
 
             buffer.read_completed(size);
         }
+
+        async_read();
     }
 
     bool Session::logon_challenge_handler()
@@ -103,7 +109,7 @@ namespace Authentication
         {
             buffer << std::uint8_t(login_version_invalid);
             send_packet(buffer);
-            return false;
+            return true;
         }
 
         auto username =
@@ -115,7 +121,7 @@ namespace Authentication
         {
             buffer << std::uint8_t(login_unknown_account);
             send_packet(buffer);
-            return false;
+            return true;
         }
 
         auto fields = account_query->fetch();

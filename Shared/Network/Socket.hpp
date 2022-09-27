@@ -20,12 +20,7 @@
 #include <Utilities/ByteBuffer.hpp>
 #include <Utilities/Log.hpp>
 #include <Utilities/MessageBuffer.hpp>
-#include <boost/asio/awaitable.hpp>
-#include <boost/asio/co_spawn.hpp>
-#include <boost/asio/detached.hpp>
 #include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/redirect_error.hpp>
-#include <boost/asio/steady_timer.hpp>
 #include <memory>
 #include <queue>
 
@@ -34,98 +29,79 @@ namespace Network
     template <class T> class Socket : public std::enable_shared_from_this<T>
     {
     public:
-        Socket(boost::asio::ip::tcp::socket socket) : m_socket(std::move(socket)), m_timer(m_socket.get_executor())
+        Socket(boost::asio::ip::tcp::socket socket) : m_socket(std::move(socket)) {}
+
+        auto is_open() { return !m_closed && !m_closing; }
+
+        void start() { on_start(); }
+
+        bool update()
         {
-            m_timer.expires_at(std::chrono::steady_clock::time_point::max());
+            if (m_closed)
+                return false;
+
+            if (m_writing_async || (m_write_queue.empty() && !m_closing))
+                return true;
+
+            while (handle_queue())
+                ;
+
+            on_update();
+
+            return true;
         }
 
-        void start()
+        void close_socket()
         {
-            on_start();
+            if (m_closed.exchange(true))
+                return;
 
-            boost::asio::co_spawn(
-                m_socket.get_executor(), [self = this->shared_from_this()] { return self->reader(); },
-                boost::asio::detached);
-
-            boost::asio::co_spawn(
-                m_socket.get_executor(), [self = this->shared_from_this()] { return self->writer(); },
-                boost::asio::detached);
+            boost::system::error_code code;
+            m_socket.shutdown(boost::asio::socket_base::shutdown_send, code);
+            if (code)
+                LOG_ERROR("Error on remote = {}, socket shutdown, code = {}, message = {}",
+                          remote_address().to_string(), code.value(), code.message());
         }
 
     protected:
+        virtual void on_start() {}
+        virtual void on_update() {}
+        virtual void on_read() {}
+
         auto remote_address() { return m_socket.remote_endpoint().address(); }
         auto remote_port() { return m_socket.remote_endpoint().port(); }
 
         auto &read_buffer() { return m_read_buffer; }
 
-        void close_socket()
-        {
-            m_socket.close();
-            m_timer.cancel();
-        }
+        void queue_packet(Utilities::MessageBuffer &&packet) { m_write_queue.push(std::move(packet)); }
 
-        void queue_packet(Utilities::MessageBuffer &&packet)
+        void async_read()
         {
-            m_write_queue.push(std::move(packet));
-            m_timer.cancel_one();
-        }
+            if (!is_open())
+                return;
 
-        virtual void on_start() {}
-        virtual void on_read() {}
+            m_read_buffer.normalize();
+            m_read_buffer.ensure_free_space();
+            m_socket.async_read_some(boost::asio::buffer(m_read_buffer.write_ptr(), m_read_buffer.remaining_size()),
+                                     [this](boost::system::error_code error, std::size_t bytes) {
+                                         if (error)
+                                         {
+                                             close_socket();
+                                             return;
+                                         }
+
+                                         m_read_buffer.write_completed(bytes);
+                                         on_read();
+                                     });
+        }
 
     private:
+        std::atomic<bool> m_closed{false};
+        std::atomic<bool> m_closing{false};
         bool m_writing_async{false};
         boost::asio::ip::tcp::socket m_socket;
-        boost::asio::steady_timer m_timer;
         Utilities::MessageBuffer m_read_buffer;
         std::queue<Utilities::MessageBuffer> m_write_queue;
-
-        boost::asio::awaitable<void> reader()
-        {
-            try
-            {
-                while (true)
-                {
-                    m_read_buffer.normalize();
-                    m_read_buffer.ensure_free_space();
-
-                    auto length = co_await m_socket.async_read_some(
-                        boost::asio::buffer(m_read_buffer.write_ptr(), m_read_buffer.remaining_size()),
-                        boost::asio::use_awaitable);
-
-                    m_read_buffer.write_completed(length);
-                    on_read();
-                }
-            }
-            catch (const std::exception &e)
-            {
-                LOG_CRITICAL("Unhandled reader exception - {}", e.what());
-                close_socket();
-            }
-        }
-
-        boost::asio::awaitable<void> writer()
-        {
-            try
-            {
-                while (m_socket.is_open())
-                {
-                    if (m_writing_async || m_write_queue.empty())
-                    {
-                        boost::system::error_code error;
-                        co_await m_timer.async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, error));
-                    }
-
-                    while (handle_queue())
-                        ;
-                }
-            }
-            catch (const std::exception &e)
-            {
-                LOG_CRITICAL("Unhandled writer exception - {}", e.what());
-                close_socket();
-            }
-        }
 
         bool handle_queue()
         {
@@ -136,27 +112,34 @@ namespace Network
             auto message_size = message.active_size();
 
             boost::system::error_code error;
-            auto length = m_socket.write_some(boost::asio::buffer(message.read_ptr(), message_size), error);
+            auto sent = m_socket.write_some(boost::asio::buffer(message.read_ptr(), message_size), error);
 
             if (error)
             {
                 if (error == boost::asio::error::would_block || error == boost::asio::error::try_again)
                     return handle_queue_async();
                 m_write_queue.pop();
+                if (m_closing && m_write_queue.empty())
+                    close_socket();
                 return false;
             }
-            else if (length == 0)
+            else if (sent == 0)
             {
                 m_write_queue.pop();
+                if (m_closing && m_write_queue.empty())
+                    close_socket();
                 return false;
             }
-            else if (length < message_size)
+            else if (sent < message_size)
             {
-                message.read_completed(length);
+                message.read_completed(sent);
                 return handle_queue_async();
             }
 
             m_write_queue.pop();
+            if (m_closing && m_write_queue.empty())
+                close_socket();
+
             return !m_write_queue.empty();
         }
 
