@@ -33,6 +33,7 @@ CREATE TABLE `realmlist` (
     `flags` TINYINT UNSIGNED NOT NULL DEFAULT '2',
     `category` TINYINT UNSIGNED NOT NULL DEFAULT '0',
     `population` FLOAT UNSIGNED NOT NULL DEFAULT '0',
+    `build` INT UNSIGNED NOT NULL DEFAULT '5875',
     PRIMARY KEY (`id`),
     UNIQUE KEY `index_name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
