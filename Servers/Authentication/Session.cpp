@@ -110,7 +110,7 @@ namespace Authentication
         auto account_query = Database::AuthDatabase::instance()->query(account_query_sql.c_str());
         if (!account_query)
         {
-            buffer << login_unknown_account;
+            buffer << std::uint8_t(login_unknown_account);
             send_packet(buffer);
             return false;
         }
@@ -121,7 +121,7 @@ namespace Authentication
         m_srp6.emplace(m_account.username, fields[2].get_binary<Crypto::Srp6::salt_length>(),
                        fields[3].get_binary<Crypto::Srp6::verifier_length>());
 
-        buffer << login_ok;
+        buffer << std::uint8_t(login_ok);
         buffer.append(m_srp6->B);
         buffer << std::uint8_t(1);
         buffer.append(m_srp6->g);

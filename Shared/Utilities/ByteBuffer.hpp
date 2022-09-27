@@ -34,7 +34,10 @@ namespace Utilities
         const std::uint8_t *data() const;
         bool empty();
 
+        ByteBuffer &operator<<(float value);
         ByteBuffer &operator<<(std::uint8_t value);
+        ByteBuffer &operator<<(std::uint16_t value);
+        ByteBuffer &operator<<(std::uint32_t value);
         ByteBuffer &operator<<(const std::string &value);
         ByteBuffer &operator<<(std::string_view value);
 

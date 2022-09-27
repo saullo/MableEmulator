@@ -30,9 +30,27 @@ namespace Utilities
 
     bool ByteBuffer::empty() { return m_data.empty(); }
 
+    ByteBuffer &ByteBuffer::operator<<(float value)
+    {
+        append<float>(value);
+        return *this;
+    }
+
     ByteBuffer &ByteBuffer::operator<<(std::uint8_t value)
     {
         append<std::uint8_t>(value);
+        return *this;
+    }
+
+    ByteBuffer &ByteBuffer::operator<<(std::uint16_t value)
+    {
+        append<std::uint16_t>(value);
+        return *this;
+    }
+
+    ByteBuffer &ByteBuffer::operator<<(std::uint32_t value)
+    {
+        append<std::uint32_t>(value);
         return *this;
     }
 
