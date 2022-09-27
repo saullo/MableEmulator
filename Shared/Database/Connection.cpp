@@ -88,6 +88,12 @@ namespace Database
 
         auto field_count = mysql_field_count(m_handler);
         auto fields = mysql_fetch_fields(result);
-        return new ResultSet(result, fields, row_count, field_count);
+        auto result_set = new ResultSet(result, fields, row_count, field_count);
+        if (!result_set || !result_set->row_count() || !result_set->next_row())
+        {
+            delete result_set;
+            return nullptr;
+        }
+        return result_set;
     }
 } // namespace Database

@@ -32,6 +32,8 @@ namespace Database
         ResultSet(MYSQL_RES *result, MYSQL_FIELD *fields, std::uint64_t row_count, std::uint32_t field_count);
         ~ResultSet();
 
+        auto row_count() { return m_row_count; }
+
         Field *fetch();
         bool next_row();
 

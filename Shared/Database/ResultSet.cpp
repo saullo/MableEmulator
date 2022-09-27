@@ -164,7 +164,7 @@ namespace Database
             return false;
         }
 
-        auto *lengths = mysql_fetch_lengths(m_result);
+        auto lengths = mysql_fetch_lengths(m_result);
         if (!lengths)
         {
             LOG_ERROR("Failed to retrive lengths value, error = {}", mysql_error(m_result->handle));
