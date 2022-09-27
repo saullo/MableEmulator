@@ -221,12 +221,9 @@ namespace Authentication
         {
             const auto &realm = realm_map.second;
 
-            auto build_is_valid = ((m_expansion & expansion_flag_post_bc) && m_build == realm.build) ||
-                                  ((m_expansion & expansion_flag_pre_bc) && !realm_list->is_pre_bc_client(realm.build));
-
             std::uint32_t flags = realm.flags;
-            auto build_info = realm_list->build_info(realm.build);
-            if (!build_is_valid)
+            const auto build_info = realm_list->build_info(realm.build);
+            if (m_build != realm.build)
             {
                 if (!build_info)
                     continue;
@@ -239,9 +236,13 @@ namespace Authentication
             if (m_expansion & expansion_flag_pre_bc && flags & realmflag_specifybuild)
                 name = fmt::format("{} ({}.{}.{})", name, build_info->major, build_info->minor, build_info->revision);
 
-            realmlist_buffer << std::uint8_t(realm.type);
             if (m_expansion & expansion_flag_post_bc)
+            {
+                realmlist_buffer << std::uint8_t(realm.type);
                 realmlist_buffer << std::uint8_t(0x01);
+            }
+            else
+                realmlist_buffer << std::uint32_t(realm.type);
             realmlist_buffer << std::uint8_t(flags);
             realmlist_buffer << name;
             realmlist_buffer << boost::lexical_cast<std::string>(realm.address_for_client(remote_address()));
@@ -280,7 +281,7 @@ namespace Authentication
         if (m_expansion & expansion_flag_post_bc)
             realmlist_size_buffer << std::uint16_t(realmlist_size);
         else
-            realmlist_size_buffer << std::uint32_t(realmlist_size);
+            realmlist_size_buffer << std::uint8_t(realmlist_size);
 
         Utilities::ByteBuffer header_buffer;
         header_buffer << std::uint8_t(cmd_realmlist);
