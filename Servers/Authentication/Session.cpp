@@ -18,111 +18,29 @@
 #include <Authentication/RealmList.hpp>
 #include <Authentication/Session.hpp>
 #include <Database/AuthDatabase.hpp>
-#include <Utilities/Log.hpp>
-#include <boost/asio/co_spawn.hpp>
-#include <boost/asio/detached.hpp>
-#include <boost/asio/redirect_error.hpp>
 
 namespace Authentication
 {
     std::array<std::uint8_t, 16> Session::version_challenge = {
         {0xBA, 0xA3, 0x1E, 0x99, 0xA0, 0x0B, 0x21, 0x57, 0xFC, 0x37, 0x3F, 0xB3, 0x69, 0xCD, 0xD2, 0xF1}};
 
-    Session::Session(boost::asio::ip::tcp::socket socket)
-        : m_socket(std::move(socket)), m_timer(m_socket.get_executor())
-    {
-        m_timer.expires_at(std::chrono::steady_clock::time_point::max());
-    }
+    Session::Session(boost::asio::ip::tcp::socket socket) : Socket(std::move(socket)) {}
 
-    void Session::start()
-    {
-        auto endpoint = m_socket.remote_endpoint();
-        LOG_DEBUG("Connected: {}:{}", endpoint.address().to_string(), endpoint.port());
+    void Session::on_start() { LOG_DEBUG("Connected: {}:{}", remote_address().to_string(), remote_port()); }
 
-        boost::asio::co_spawn(
-            m_socket.get_executor(), [self = this->shared_from_this()] { return self->reader(); },
-            boost::asio::detached);
-
-        boost::asio::co_spawn(
-            m_socket.get_executor(), [self = this->shared_from_this()] { return self->writer(); },
-            boost::asio::detached);
-    }
-
-    boost::asio::awaitable<void> Session::reader()
-    {
-        try
-        {
-            while (true)
-            {
-                m_read_buffer.normalize();
-                m_read_buffer.ensure_free_space();
-
-                auto length = co_await m_socket.async_read_some(
-                    boost::asio::buffer(m_read_buffer.write_ptr(), m_read_buffer.remaining_size()),
-                    boost::asio::use_awaitable);
-
-                m_read_buffer.write_completed(length);
-                read_handler();
-            }
-        }
-        catch (const std::exception &e)
-        {
-            LOG_CRITICAL("Unhandled reader exception - {}", e.what());
-            stop();
-        }
-    }
-
-    boost::asio::awaitable<void> Session::writer()
-    {
-        try
-        {
-            while (m_socket.is_open())
-            {
-                if (m_write_queue.empty())
-                {
-                    boost::system::error_code error;
-                    co_await m_timer.async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, error));
-                }
-                else
-                {
-                    auto &message = m_write_queue.front();
-                    auto message_size = message.active_size();
-                    auto length = co_await m_socket.async_write_some(
-                        boost::asio::buffer(message.read_ptr(), message_size), boost::asio::use_awaitable);
-
-                    if (message_size < length)
-                        message.read_completed(length);
-
-                    m_write_queue.pop();
-                }
-            }
-        }
-        catch (const std::exception &e)
-        {
-            LOG_CRITICAL("Unhandled writer exception - {}", e.what());
-            stop();
-        }
-    }
-
-    void Session::stop()
-    {
-        m_socket.close();
-        m_timer.cancel();
-    }
-
-    void Session::read_handler()
+    void Session::on_read()
     {
         Handler command_handlers[] = {
             {cmd_auth_logon_challenge, logon_challenge_initial_size, &Session::logon_challenge_handler},
             {cmd_auth_logon_proof, sizeof(cmd_auth_logon_proof_client_t), &Session::logon_proof_handler}};
         auto handlers_size = sizeof(command_handlers) / sizeof(Handler);
 
-        auto &read_buffer = m_read_buffer;
-        while (read_buffer.active_size())
+        auto &buffer = read_buffer();
+        while (buffer.active_size())
         {
             Handler handler;
             std::size_t i;
-            auto command = read_buffer.read_ptr()[0];
+            auto command = buffer.read_ptr()[0];
             for (i = 0; i < handlers_size; i++)
             {
                 handler = command_handlers[i];
@@ -132,7 +50,7 @@ namespace Authentication
 
             if (i == handlers_size)
             {
-                read_buffer.reset();
+                buffer.reset();
                 LOG_DEBUG("Received invalid command = {}", command);
                 return;
             }
@@ -140,32 +58,32 @@ namespace Authentication
             auto size = std::uint16_t(handler.size);
             if (command == cmd_auth_logon_challenge)
             {
-                auto challenge = reinterpret_cast<cmd_auth_logon_challenge_client_t *>(read_buffer.read_ptr());
+                auto challenge = reinterpret_cast<cmd_auth_logon_challenge_client_t *>(buffer.read_ptr());
                 size += challenge->size;
                 if (size > sizeof(cmd_auth_logon_challenge_client_t) + 16)
                 {
-                    stop();
+                    close_socket();
                     return;
                 }
             }
 
-            if (read_buffer.active_size() < size)
+            if (buffer.active_size() < size)
                 break;
 
             if (!(*this.*handler.handler)())
             {
                 LOG_DEBUG("Command handler failed, command = {}", command);
-                stop();
+                close_socket();
                 return;
             }
 
-            read_buffer.read_completed(size);
+            buffer.read_completed(size);
         }
     }
 
     bool Session::logon_challenge_handler()
     {
-        auto challenge = reinterpret_cast<cmd_auth_logon_challenge_client_t *>(m_read_buffer.read_ptr());
+        auto challenge = reinterpret_cast<cmd_auth_logon_challenge_client_t *>(read_buffer().read_ptr());
         if (challenge->size - (sizeof(cmd_auth_logon_challenge_client_t) - logon_challenge_initial_size - 1) !=
             challenge->account_name_length)
             return false;
@@ -208,9 +126,8 @@ namespace Authentication
         buffer.append(version_challenge.data(), version_challenge.size());
         buffer << std::uint8_t(0x00);
 
-        auto endpoint = m_socket.remote_endpoint();
-        LOG_DEBUG("Successfully logged account username = {}, address = {}:{}", username,
-                  endpoint.address().to_string(), endpoint.port());
+        LOG_DEBUG("Successfully logged account username = {}, address = {}:{}", username, remote_address().to_string(),
+                  remote_port());
 
         send_packet(buffer);
         return true;
@@ -218,7 +135,7 @@ namespace Authentication
 
     bool Session::logon_proof_handler()
     {
-        auto logon_proof = reinterpret_cast<cmd_auth_logon_proof_client_t *>(m_read_buffer.read_ptr());
+        auto logon_proof = reinterpret_cast<cmd_auth_logon_proof_client_t *>(read_buffer().read_ptr());
         if (auto key = m_srp6->verify_challenge(logon_proof->client_public_key, logon_proof->client_proof))
         {
             m_session_key = *key;
@@ -257,11 +174,5 @@ namespace Authentication
         Utilities::MessageBuffer buffer(packet.size());
         buffer.write(packet.data(), packet.size());
         queue_packet(std::move(buffer));
-    }
-
-    void Session::queue_packet(Utilities::MessageBuffer &&packet)
-    {
-        m_write_queue.push(std::move(packet));
-        m_timer.cancel_one();
     }
 } // namespace Authentication

@@ -18,22 +18,18 @@
 #pragma once
 
 #include <Crypto/Srp6.hpp>
-#include <Utilities/ByteBuffer.hpp>
-#include <Utilities/MessageBuffer.hpp>
-#include <boost/asio/awaitable.hpp>
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/steady_timer.hpp>
-#include <memory>
-#include <queue>
+#include <Network/Socket.hpp>
 
 namespace Authentication
 {
-    class Session : public std::enable_shared_from_this<Session>
+    class Session : public Network::Socket<Session>
     {
     public:
         Session(boost::asio::ip::tcp::socket socket);
 
-        void start();
+    protected:
+        void on_start() override;
+        void on_read() override;
 
     private:
         static constexpr auto logon_challenge_initial_size = 4;
@@ -100,21 +96,11 @@ namespace Authentication
         static_assert(sizeof(cmd_auth_logon_proof_server_t) == (1 + 1 + 20 + 4));
 #pragma pack(pop)
 
-        Utilities::MessageBuffer m_read_buffer;
-        boost::asio::ip::tcp::socket m_socket;
-        boost::asio::steady_timer m_timer;
-        std::queue<Utilities::MessageBuffer> m_write_queue;
         std::optional<Crypto::Srp6> m_srp6;
         Crypto::Srp6::SessionKey m_session_key{};
 
-        void stop();
-        boost::asio::awaitable<void> reader();
-        boost::asio::awaitable<void> writer();
-        void read_handler();
         bool logon_challenge_handler();
         bool logon_proof_handler();
-        bool build_is_valid(std::uint16_t build);
         void send_packet(Utilities::ByteBuffer &packet);
-        void queue_packet(Utilities::MessageBuffer &&packet);
     };
 } // namespace Authentication

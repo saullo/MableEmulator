@@ -1,0 +1,138 @@
+/**
+ * MableEmulator is a server emulator for World of Warcraft
+ * Copyright (C) 2022 Saullo Bretas Silva
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+#pragma once
+
+#include <Utilities/ByteBuffer.hpp>
+#include <Utilities/Log.hpp>
+#include <Utilities/MessageBuffer.hpp>
+#include <boost/asio/awaitable.hpp>
+#include <boost/asio/co_spawn.hpp>
+#include <boost/asio/detached.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/redirect_error.hpp>
+#include <boost/asio/steady_timer.hpp>
+#include <memory>
+#include <queue>
+
+namespace Network
+{
+    template <class T> class Socket : public std::enable_shared_from_this<T>
+    {
+    public:
+        Socket(boost::asio::ip::tcp::socket socket) : m_socket(std::move(socket)), m_timer(m_socket.get_executor())
+        {
+            m_timer.expires_at(std::chrono::steady_clock::time_point::max());
+        }
+
+        void start()
+        {
+            on_start();
+
+            boost::asio::co_spawn(
+                m_socket.get_executor(), [self = this->shared_from_this()] { return self->reader(); },
+                boost::asio::detached);
+
+            boost::asio::co_spawn(
+                m_socket.get_executor(), [self = this->shared_from_this()] { return self->writer(); },
+                boost::asio::detached);
+        }
+
+    protected:
+        auto remote_address() { return m_socket.remote_endpoint().address(); }
+        auto remote_port() { return m_socket.remote_endpoint().port(); }
+
+        auto &read_buffer() { return m_read_buffer; }
+
+        void close_socket()
+        {
+            m_socket.close();
+            m_timer.cancel();
+        }
+
+        void queue_packet(Utilities::MessageBuffer &&packet)
+        {
+            m_write_queue.push(std::move(packet));
+            m_timer.cancel_one();
+        }
+
+        virtual void on_start() {}
+        virtual void on_read() {}
+
+    private:
+        boost::asio::ip::tcp::socket m_socket;
+        boost::asio::steady_timer m_timer;
+        Utilities::MessageBuffer m_read_buffer;
+        std::queue<Utilities::MessageBuffer> m_write_queue;
+
+        boost::asio::awaitable<void> reader()
+        {
+            try
+            {
+                while (true)
+                {
+                    m_read_buffer.normalize();
+                    m_read_buffer.ensure_free_space();
+
+                    auto length = co_await m_socket.async_read_some(
+                        boost::asio::buffer(m_read_buffer.write_ptr(), m_read_buffer.remaining_size()),
+                        boost::asio::use_awaitable);
+
+                    m_read_buffer.write_completed(length);
+                    on_read();
+                }
+            }
+            catch (const std::exception &e)
+            {
+                LOG_CRITICAL("Unhandled reader exception - {}", e.what());
+                close_socket();
+            }
+        }
+
+        boost::asio::awaitable<void> writer()
+        {
+            try
+            {
+                while (m_socket.is_open())
+                {
+                    if (m_write_queue.empty())
+                    {
+                        boost::system::error_code error;
+                        co_await m_timer.async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, error));
+                    }
+                    else
+                    {
+                        auto &message = m_write_queue.front();
+                        auto message_size = message.active_size();
+                        auto length = co_await m_socket.async_write_some(
+                            boost::asio::buffer(message.read_ptr(), message_size), boost::asio::use_awaitable);
+
+                        if (message_size < length)
+                            message.read_completed(length);
+
+                        m_write_queue.pop();
+                    }
+                }
+            }
+            catch (const std::exception &e)
+            {
+                LOG_CRITICAL("Unhandled writer exception - {}", e.what());
+                close_socket();
+            }
+        }
+    };
+} // namespace Network
