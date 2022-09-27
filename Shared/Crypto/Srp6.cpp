@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include <Crypto/Random.hpp>
 #include <Crypto/Srp6.hpp>
 #include <algorithm>
 #include <cassert>
@@ -58,24 +59,6 @@ namespace Crypto
     {
         std::array<std::uint8_t, Size> result;
         hex_string_to_byte_array(value, result, reverse);
-        return result;
-    }
-
-    void get_random_bytes(std::uint8_t *buffer, std::size_t length)
-    {
-        auto result = RAND_bytes(buffer, length);
-        assert(result == 1);
-    }
-
-    template <typename Container> void get_random_bytes(Container &container)
-    {
-        get_random_bytes(std::data(container), std::size(container));
-    }
-
-    template <std::size_t Size> std::array<std::uint8_t, Size> get_random_bytes()
-    {
-        std::array<std::uint8_t, Size> result;
-        get_random_bytes(result);
         return result;
     }
 
