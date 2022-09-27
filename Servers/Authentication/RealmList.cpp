@@ -72,6 +72,8 @@ namespace Authentication
         if (error)
             return;
 
+        m_realms.clear();
+
         if (auto query =
                 Database::AuthDatabase::instance()->query("SELECT id, name, address, local_address, local_subnet_mask, "
                                                           "port, type, flags, category, population, build FROM "
