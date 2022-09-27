@@ -112,7 +112,8 @@ namespace Authentication
     void Session::read_handler()
     {
         Handler command_handlers[] = {
-            {cmd_auth_logon_challenge, logon_challenge_initial_size, &Session::logon_challenge_handler}};
+            {cmd_auth_logon_challenge, logon_challenge_initial_size, &Session::logon_challenge_handler},
+            {cmd_auth_logon_proof, sizeof(cmd_auth_logon_proof_client_t), &Session::logon_proof_handler}};
         auto handlers_size = sizeof(command_handlers) / sizeof(Handler);
 
         auto &read_buffer = m_read_buffer;
@@ -239,6 +240,39 @@ namespace Authentication
                 return true;
         }
         return false;
+    }
+
+    bool Session::logon_proof_handler()
+    {
+        auto logon_proof = reinterpret_cast<cmd_auth_logon_proof_client_t *>(m_read_buffer.read_ptr());
+        if (auto key = m_srp6->verify_challenge(logon_proof->client_public_key, logon_proof->client_proof))
+        {
+            m_session_key = *key;
+
+            auto server_proof = Crypto::Srp6::session_verifier(logon_proof->client_public_key,
+                                                               logon_proof->client_proof, m_session_key);
+
+            cmd_auth_logon_proof_server_t proof = {};
+            proof.command = cmd_auth_logon_proof;
+            proof.result = 0;
+            proof.server_proof = server_proof;
+            proof.hardware_survey_id = 0x00;
+
+            Utilities::ByteBuffer buffer;
+            buffer.resize(sizeof(proof));
+            std::memcpy(buffer.data(), &proof, sizeof(proof));
+
+            send_packet(buffer);
+        }
+        else
+        {
+            Utilities::ByteBuffer buffer;
+            buffer << cmd_auth_logon_proof;
+            buffer << login_unknown_account;
+            buffer << std::uint16_t(0);
+            send_packet(buffer);
+        }
+        return true;
     }
 
     void Session::send_packet(Utilities::ByteBuffer &packet)
