@@ -22,7 +22,7 @@
 
 namespace Database
 {
-    float Field::get_float()
+    float Field::get_float() const
     {
         if (!m_data.value)
             return 0.0f;
@@ -32,9 +32,9 @@ namespace Database
         return static_cast<float>(std::atof(m_data.value));
     }
 
-    std::uint8_t Field::get_uint8()
+    std::uint8_t Field::get_uint8() const
     {
-        if (m_data.value)
+        if (!m_data.value)
             return 0;
 
         if (m_data.is_raw)
@@ -42,7 +42,7 @@ namespace Database
         return static_cast<std::uint8_t>(std::strtoul(m_data.value, nullptr, 10));
     }
 
-    std::uint16_t Field::get_uint16()
+    std::uint16_t Field::get_uint16() const
     {
         if (!m_data.value)
             return 0;
@@ -52,7 +52,7 @@ namespace Database
         return static_cast<std::uint16_t>(std::strtoul(m_data.value, nullptr, 10));
     }
 
-    std::uint32_t Field::get_uint32()
+    std::uint32_t Field::get_uint32() const
     {
         if (!m_data.value)
             return 0;
