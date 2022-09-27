@@ -39,6 +39,8 @@ namespace Utilities
         void read_completed(std::size_t size);
         void write_completed(std::size_t size);
         void write(const void *data, std::size_t size);
+        void resize(std::size_t size);
+        std::vector<std::uint8_t> &&move();
 
     private:
         static constexpr auto initial_size = 4096;

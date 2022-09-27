@@ -73,4 +73,12 @@ namespace Utilities
         write_completed(size);
     }
 
+    void MessageBuffer::resize(std::size_t size) { m_data.resize(size); }
+
+    std::vector<std::uint8_t> &&MessageBuffer::move()
+    {
+        m_write_pos = 0;
+        m_read_pos = 0;
+        return std::move(m_data);
+    }
 } // namespace Utilities
