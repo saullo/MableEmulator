@@ -26,12 +26,23 @@ namespace Utilities
     std::size_t ByteBuffer::size() { return m_data.size(); }
 
     std::uint8_t *ByteBuffer::data() { return m_data.data(); }
+    const std::uint8_t *ByteBuffer::data() const { return m_data.data(); }
 
     bool ByteBuffer::empty() { return m_data.empty(); }
 
     ByteBuffer &ByteBuffer::operator<<(std::uint8_t value)
     {
         append<std::uint8_t>(value);
+        return *this;
+    }
+
+    ByteBuffer &ByteBuffer::operator<<(const std::string &value) { return operator<<(std::string_view(value)); }
+
+    ByteBuffer &ByteBuffer::operator<<(std::string_view value)
+    {
+        if (auto length = value.length())
+            append(reinterpret_cast<const std::uint8_t *>(value.data()), length);
+        append(static_cast<std::uint8_t>(0));
         return *this;
     }
 
@@ -65,6 +76,14 @@ namespace Utilities
 
         std::memcpy(&m_data[m_write_pos], value, size);
         m_write_pos = new_size;
+    }
+
+    void ByteBuffer::append(const ByteBuffer &buffer)
+    {
+        if (!buffer.m_write_pos)
+            return;
+
+        append(buffer.data(), buffer.m_write_pos);
     }
 
     void ByteBuffer::resize(std::size_t new_size)

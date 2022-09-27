@@ -19,6 +19,7 @@
 
 #include <array>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace Utilities
@@ -30,12 +31,18 @@ namespace Utilities
 
         std::size_t size();
         std::uint8_t *data();
+        const std::uint8_t *data() const;
         bool empty();
 
         ByteBuffer &operator<<(std::uint8_t value);
+        ByteBuffer &operator<<(const std::string &value);
+        ByteBuffer &operator<<(std::string_view value);
+
+        void append(const ByteBuffer &buffer);
+        void append(const std::uint8_t *value, std::size_t size);
 
         template <typename T> void append(T value);
-        void append(const std::uint8_t *value, std::size_t size);
+
         template <std::size_t Size> void append(const std::array<std::uint8_t, Size> &value)
         {
             append(value.data(), Size);
