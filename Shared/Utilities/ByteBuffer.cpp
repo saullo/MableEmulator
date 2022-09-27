@@ -23,7 +23,11 @@ namespace Utilities
 {
     ByteBuffer::ByteBuffer() { m_data.reserve(initial_size); }
 
-    std::size_t ByteBuffer::size() { return m_data.size(); }
+    ByteBuffer::ByteBuffer(std::size_t size) { m_data.reserve(size); }
+
+    ByteBuffer::ByteBuffer(MessageBuffer &&buffer) : m_data(buffer.move()) {}
+
+    std::size_t ByteBuffer::size() const { return m_data.size(); }
 
     std::uint8_t *ByteBuffer::data() { return m_data.data(); }
     const std::uint8_t *ByteBuffer::data() const { return m_data.data(); }

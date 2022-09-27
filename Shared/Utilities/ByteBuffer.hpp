@@ -17,6 +17,7 @@
  */
 #pragma once
 
+#include <Utilities/MessageBuffer.hpp>
 #include <array>
 #include <cstdint>
 #include <string>
@@ -28,8 +29,10 @@ namespace Utilities
     {
     public:
         ByteBuffer();
+        ByteBuffer(std::size_t size);
+        ByteBuffer(MessageBuffer &&buffer);
 
-        std::size_t size();
+        std::size_t size() const;
         std::uint8_t *data();
         const std::uint8_t *data() const;
         bool empty();
