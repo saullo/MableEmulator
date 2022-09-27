@@ -51,6 +51,7 @@ namespace Authentication
         RealmFlags flags;
         std::uint8_t category;
         float population;
+        std::uint32_t build;
 
         boost::asio::ip::basic_endpoint<boost::asio::ip::tcp> address_for_client(
             const boost::asio::ip::address &client_address) const;

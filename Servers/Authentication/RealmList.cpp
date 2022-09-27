@@ -69,7 +69,7 @@ namespace Authentication
     {
         if (auto query =
                 Database::AuthDatabase::instance()->query("SELECT id, name, address, local_address, local_subnet_mask, "
-                                                          "port, type, flags, category, population FROM "
+                                                          "port, type, flags, category, population, build FROM "
                                                           "realmlist"))
         {
             do
@@ -106,10 +106,11 @@ namespace Authentication
                 }
 
                 auto port = fields[5].get_uint16();
-                auto type = fields[6].get_uint32();
-                auto flags = fields[7].get_uint32();
+                auto type = fields[6].get_uint8();
+                auto flags = fields[7].get_uint8();
                 auto category = fields[8].get_uint8();
                 auto population = fields[9].get_float();
+                auto build = fields[10].get_uint32();
 
                 auto &realm = m_realms[id];
                 realm.id = id;
@@ -122,6 +123,7 @@ namespace Authentication
                 realm.flags = RealmFlags(flags);
                 realm.category = category;
                 realm.population = population;
+                realm.build = build;
 
             } while (query->next_row());
         }
