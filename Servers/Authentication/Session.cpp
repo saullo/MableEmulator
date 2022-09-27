@@ -213,6 +213,16 @@ namespace Authentication
     bool Session::realmlist_handler()
     {
         std::map<std::uint32_t, std::uint8_t> characters;
+        auto character_query =
+            fmt::format("SELECT realm_id, count FROM characters WHERE account_id = '{}'", m_account.id);
+        if (auto query = Database::AuthDatabase::instance()->query(character_query.c_str()))
+        {
+            do
+            {
+                auto fields = query->fetch();
+                characters[fields[0].get_uint32()] = fields[1].get_uint8();
+            } while (query->next_row());
+        }
 
         Utilities::ByteBuffer realmlist_buffer;
         std::size_t realmlist_size = 0;
@@ -247,7 +257,7 @@ namespace Authentication
             realmlist_buffer << name;
             realmlist_buffer << boost::lexical_cast<std::string>(realm.address_for_client(remote_address()));
             realmlist_buffer << float(realm.population);
-            realmlist_buffer << std::uint8_t(0x00);
+            realmlist_buffer << std::uint8_t(characters[realm.id]);
             realmlist_buffer << std::uint8_t(realm.category);
             if (m_expansion & expansion_flag_post_bc)
                 realmlist_buffer << std::uint8_t(realm.id);
