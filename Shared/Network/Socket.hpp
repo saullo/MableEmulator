@@ -35,7 +35,7 @@ namespace Network
 
         void start() { on_start(); }
 
-        bool update()
+        virtual bool update()
         {
             if (m_closed)
                 return false;
@@ -45,8 +45,6 @@ namespace Network
 
             while (handle_queue())
                 ;
-
-            on_update();
 
             return true;
         }
@@ -65,7 +63,6 @@ namespace Network
 
     protected:
         virtual void on_start() {}
-        virtual void on_update() {}
         virtual void on_read() {}
 
         auto remote_address() { return m_socket.remote_endpoint().address(); }
