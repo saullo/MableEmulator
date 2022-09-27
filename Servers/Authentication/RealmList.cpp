@@ -33,9 +33,11 @@ namespace Authentication
     void RealmList::init(boost::asio::io_context &io_context)
     {
         m_resolver = std::make_unique<Network::Resolver>(io_context);
+        m_timer = std::make_unique<DeadlineTimer>(io_context);
 
         init_builds();
-        init_realms();
+        boost::system::error_code error;
+        update_realms(error);
     }
 
     const RealmList::BuildInformation *RealmList::build_info(std::uint32_t build_number) const
@@ -65,8 +67,11 @@ namespace Authentication
         }
     }
 
-    void RealmList::init_realms()
+    void RealmList::update_realms(boost::system::error_code error)
     {
+        if (error)
+            return;
+
         if (auto query =
                 Database::AuthDatabase::instance()->query("SELECT id, name, address, local_address, local_subnet_mask, "
                                                           "port, type, flags, category, population, build FROM "
@@ -116,6 +121,17 @@ namespace Authentication
                 auto population = fields[9].get_float();
                 auto build = fields[10].get_uint32();
 
+                if (!m_realms.contains(id))
+                {
+                    LOG_DEBUG("Added realm id = {}, name = {}, type = {}, flags = {}, population = {}, category = {}",
+                              id, name, type, flags, population, category);
+                }
+                else
+                {
+                    LOG_DEBUG("Updated realm id = {}, name = {}, type = {}, flags = {}, population = {}, category = {}",
+                              id, name, type, flags, population, category);
+                }
+
                 auto &realm = m_realms[id];
                 realm.id = id;
                 realm.name = name;
@@ -128,11 +144,11 @@ namespace Authentication
                 realm.category = category;
                 realm.population = population;
                 realm.build = build;
-
-                LOG_DEBUG("Added realm id = {}, name = {}, type = {}, flags = {}, population = {}, category = {}",
-                          realm.id, realm.name, realm.type, realm.flags, realm.population, realm.category);
             } while (query->next_row());
         }
+
+        m_timer->expires_from_now(boost::posix_time::seconds(30));
+        m_timer->async_wait([this](auto code) { update_realms(code); });
     }
 
     bool RealmList::is_pre_bc_client(std::uint32_t build)

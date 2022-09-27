@@ -19,6 +19,7 @@
 
 #include <Authentication/Realm.hpp>
 #include <Network/Resolver.hpp>
+#include <boost/asio/deadline_timer.hpp>
 #include <map>
 #include <vector>
 
@@ -47,14 +48,19 @@ namespace Authentication
         bool is_post_bc_client(std::uint32_t build);
 
     private:
+        using DeadlineTimer = boost::asio::basic_deadline_timer<boost::posix_time::ptime,
+                                                                boost::asio::time_traits<boost::posix_time::ptime>,
+                                                                boost::asio::io_context::executor_type>;
+
         static constexpr auto max_pre_bc_client_build = 6141;
         static RealmList *m_instance;
 
         std::vector<BuildInformation> m_builds;
         std::map<std::uint32_t, Realm> m_realms;
         std::unique_ptr<Network::Resolver> m_resolver;
+        std::unique_ptr<DeadlineTimer> m_timer;
 
         void init_builds();
-        void init_realms();
+        void update_realms(boost::system::error_code error);
     };
 } // namespace Authentication
