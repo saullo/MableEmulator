@@ -74,6 +74,7 @@ namespace Network
         virtual void on_read() {}
 
     private:
+        bool m_writing_async{false};
         boost::asio::ip::tcp::socket m_socket;
         boost::asio::steady_timer m_timer;
         Utilities::MessageBuffer m_read_buffer;
@@ -109,23 +110,14 @@ namespace Network
             {
                 while (m_socket.is_open())
                 {
-                    if (m_write_queue.empty())
+                    if (m_writing_async || m_write_queue.empty())
                     {
                         boost::system::error_code error;
                         co_await m_timer.async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, error));
                     }
-                    else
-                    {
-                        auto &message = m_write_queue.front();
-                        auto message_size = message.active_size();
-                        auto length = co_await m_socket.async_write_some(
-                            boost::asio::buffer(message.read_ptr(), message_size), boost::asio::use_awaitable);
 
-                        if (message_size < length)
-                            message.read_completed(length);
-
-                        m_write_queue.pop();
-                    }
+                    while (handle_queue())
+                        ;
                 }
             }
             catch (const std::exception &e)
@@ -133,6 +125,52 @@ namespace Network
                 LOG_CRITICAL("Unhandled writer exception - {}", e.what());
                 close_socket();
             }
+        }
+
+        bool handle_queue()
+        {
+            if (m_write_queue.empty())
+                return false;
+
+            auto &message = m_write_queue.front();
+            auto message_size = message.active_size();
+
+            boost::system::error_code error;
+            auto length = m_socket.write_some(boost::asio::buffer(message.read_ptr(), message_size), error);
+
+            if (error)
+            {
+                if (error == boost::asio::error::would_block || error == boost::asio::error::try_again)
+                    return handle_queue_async();
+                m_write_queue.pop();
+                return false;
+            }
+            else if (length == 0)
+            {
+                m_write_queue.pop();
+                return false;
+            }
+            else if (length < message_size)
+            {
+                message.read_completed(length);
+                return handle_queue_async();
+            }
+
+            m_write_queue.pop();
+            return !m_write_queue.empty();
+        }
+
+        bool handle_queue_async()
+        {
+            if (m_writing_async)
+                return false;
+            m_writing_async = true;
+
+            m_socket.async_write_some(boost::asio::null_buffers(), [this](auto, auto) {
+                m_writing_async = false;
+                handle_queue();
+            });
+            return false;
         }
     };
 } // namespace Network
