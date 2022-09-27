@@ -88,11 +88,13 @@ namespace Authentication
             challenge->account_name_length)
             return false;
 
+        m_build = challenge->build;
+
         Utilities::ByteBuffer buffer;
         buffer << cmd_auth_logon_challenge;
         buffer << std::uint8_t(0x00);
 
-        if (!RealmList::instance()->build_info(challenge->build))
+        if (!RealmList::instance()->build_info(m_build))
         {
             buffer << login_version_invalid;
             send_packet(buffer);
@@ -102,7 +104,7 @@ namespace Authentication
         auto username =
             std::string(reinterpret_cast<const char *>(challenge->account_name), challenge->account_name_length);
         auto account_query_sql =
-            fmt::format("SELECT username, salt, verifier FROM account WHERE username = '{}';", username);
+            fmt::format("SELECT id, username, salt, verifier FROM account WHERE username = '{}';", username);
         auto account_query = Database::AuthDatabase::instance()->query(account_query_sql.c_str());
         if (!account_query)
         {
@@ -112,9 +114,10 @@ namespace Authentication
         }
 
         auto fields = account_query->fetch();
+        m_account.load(fields);
 
-        m_srp6.emplace(fields[0].get_string(), fields[1].get_binary<Crypto::Srp6::salt_length>(),
-                       fields[2].get_binary<Crypto::Srp6::verifier_length>());
+        m_srp6.emplace(m_account.username, fields[2].get_binary<Crypto::Srp6::salt_length>(),
+                       fields[3].get_binary<Crypto::Srp6::verifier_length>());
 
         buffer << login_ok;
         buffer.append(m_srp6->B);
@@ -126,7 +129,7 @@ namespace Authentication
         buffer.append(version_challenge.data(), version_challenge.size());
         buffer << std::uint8_t(0x00);
 
-        LOG_DEBUG("Successfully logged account username = {}, address = {}:{}", username, remote_address().to_string(),
+        LOG_DEBUG("Account username = {}, address = {}:{}", m_account.username, remote_address().to_string(),
                   remote_port());
 
         send_packet(buffer);
@@ -143,7 +146,10 @@ namespace Authentication
             auto server_proof = Crypto::Srp6::session_verifier(logon_proof->client_public_key,
                                                                logon_proof->client_proof, m_session_key);
 
-            cmd_auth_logon_proof_server_t proof = {};
+            LOG_DEBUG("Successfully logged account username = {}, address = {}:{}", m_account.username,
+                      remote_address().to_string(), remote_port());
+
+            cmd_auth_logon_proof_server_t proof;
             proof.command = cmd_auth_logon_proof;
             proof.result = 0;
             proof.server_proof = server_proof;
@@ -174,5 +180,11 @@ namespace Authentication
         Utilities::MessageBuffer buffer(packet.size());
         buffer.write(packet.data(), packet.size());
         queue_packet(std::move(buffer));
+    }
+
+    void Session::Account::load(Database::Field *field)
+    {
+        id = field[0].get_uint32();
+        username = field[1].get_string();
     }
 } // namespace Authentication

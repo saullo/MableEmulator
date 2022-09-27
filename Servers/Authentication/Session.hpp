@@ -18,6 +18,7 @@
 #pragma once
 
 #include <Crypto/Srp6.hpp>
+#include <Database/Field.hpp>
 #include <Network/Socket.hpp>
 
 namespace Authentication
@@ -53,6 +54,14 @@ namespace Authentication
             Command command;
             std::size_t size;
             bool (Session::*handler)();
+        };
+
+        struct Account
+        {
+            std::uint32_t id{0};
+            std::string username;
+
+            void load(Database::Field *field);
         };
 
 #pragma pack(push, 1)
@@ -95,9 +104,10 @@ namespace Authentication
         } cmd_auth_logon_proof_server_t;
         static_assert(sizeof(cmd_auth_logon_proof_server_t) == (1 + 1 + 20 + 4));
 #pragma pack(pop)
-
+        std::uint16_t m_build{0};
         std::optional<Crypto::Srp6> m_srp6;
         Crypto::Srp6::SessionKey m_session_key{};
+        Account m_account{};
 
         bool logon_challenge_handler();
         bool logon_proof_handler();
