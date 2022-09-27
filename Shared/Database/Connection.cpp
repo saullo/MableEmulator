@@ -96,4 +96,19 @@ namespace Database
         }
         return result_set;
     }
+
+    bool Connection::execute(const char *sql)
+    {
+        if (!m_handler)
+            return false;
+
+        if (mysql_query(m_handler, sql) != 0)
+        {
+            LOG_ERROR("Failed to execute sql = {}, error = {}", sql, mysql_error(m_handler));
+            return false;
+        }
+        else
+            LOG_DEBUG("Successfully execute sql = {}", sql);
+        return true;
+    }
 } // namespace Database

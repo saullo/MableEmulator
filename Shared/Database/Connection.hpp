@@ -31,6 +31,7 @@ namespace Database
         std::uint32_t open();
         void close();
         ResultSet *query(const char *sql);
+        bool execute(const char *sql);
 
     private:
         MYSQL *m_handler;
