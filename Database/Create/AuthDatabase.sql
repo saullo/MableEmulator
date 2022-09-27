@@ -37,3 +37,12 @@ CREATE TABLE `realmlist` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `index_name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+DROP TABLE IF EXISTS `characters`;
+CREATE TABLE `characters` (
+    `realm_id` INT UNSIGNED NOT NULL DEFAULT '0',
+    `account_id` INT UNSIGNED NOT NULL,
+    `count` TINYINT UNSIGNED NOT NULL DEFAULT '0',
+    PRIMARY KEY (`realm_id`, `account_id`),
+    KEY `account_id` (`account_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
