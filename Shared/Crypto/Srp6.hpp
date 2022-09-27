@@ -20,6 +20,7 @@
 #include <Crypto/BigNumber.hpp>
 #include <Crypto/GenericHash.hpp>
 #include <array>
+#include <optional>
 #include <string>
 
 namespace Crypto
@@ -33,11 +34,16 @@ namespace Crypto
         using Verifier = std::array<std::uint8_t, verifier_length>;
         static constexpr std::size_t ephemeral_key_length = 32;
         using EphemeralKey = std::array<std::uint8_t, ephemeral_key_length>;
+        static constexpr std::size_t session_key_length = 40;
+        using SessionKey = std::array<std::uint8_t, session_key_length>;
 
         static const std::array<std::uint8_t, 1> g;
         static const std::array<std::uint8_t, 32> N;
 
+        static SHA1::Digest session_verifier(const EphemeralKey &p_a, const SHA1::Digest &p_m, const SessionKey &key);
+
         Srp6(const std::string &username, const Salt &salt, const Verifier &verifier);
+        std::optional<SessionKey> verify_challenge(const EphemeralKey &p_a, const SHA1::Digest &p_m);
 
     private:
         static const BigNumber m_g;
@@ -46,8 +52,10 @@ namespace Crypto
         const SHA1::Digest m_I;
         const BigNumber m_b;
         const BigNumber m_v;
+        bool m_used{false};
 
         static EphemeralKey calculate_B(const BigNumber &b, const BigNumber &v);
+        static Srp6::SessionKey SHA1_inter_leave(const EphemeralKey &S);
 
     public:
         const Salt s;

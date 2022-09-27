@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include <Crypto/Srp6.hpp>
+#include <algorithm>
 #include <cassert>
 #include <openssl/rand.h>
 
@@ -92,5 +93,64 @@ namespace Crypto
     Srp6::EphemeralKey Srp6::calculate_B(const BigNumber &b, const BigNumber &v)
     {
         return ((m_g.mod_exp(b, m_N) + (v * 3)) % N).to_byte_array<ephemeral_key_length>();
+    }
+
+    SHA1::Digest Srp6::session_verifier(const EphemeralKey &p_a, const SHA1::Digest &p_m, const SessionKey &key)
+    {
+        return SHA1::digest_of(p_a, p_m, key);
+    }
+
+    std::optional<Srp6::SessionKey> Srp6::verify_challenge(const EphemeralKey &p_a, const SHA1::Digest &p_m)
+    {
+        assert(!m_used);
+        m_used = true;
+
+        const BigNumber a(p_a);
+        if ((a % m_N).is_zero())
+            return std::nullopt;
+
+        const BigNumber u(SHA1::digest_of(p_a, B));
+        const EphemeralKey S = (a * (m_v.mod_exp(u, m_N))).mod_exp(m_b, N).to_byte_array<32>();
+        auto key = SHA1_inter_leave(S);
+        const SHA1::Digest n_hash = SHA1::digest_of(N);
+        const SHA1::Digest g_hash = SHA1::digest_of(g);
+
+        SHA1::Digest ng_hash;
+        std::transform(n_hash.begin(), n_hash.end(), g_hash.begin(), ng_hash.begin(), std::bit_xor<>());
+
+        const SHA1::Digest m = SHA1::digest_of(ng_hash, m_I, s, p_a, B, key);
+        if (m == p_m)
+            return key;
+        return std::nullopt;
+    }
+
+    Srp6::SessionKey Srp6::SHA1_inter_leave(const EphemeralKey &S)
+    {
+        std::array<std::uint8_t, ephemeral_key_length / 2> buffer0;
+        std::array<std::uint8_t, ephemeral_key_length / 2> buffer1;
+        for (std::size_t i = 0; i < ephemeral_key_length / 2; i++)
+        {
+            buffer0[i] = S[2 * i + 0];
+            buffer1[i] = S[2 * i + 1];
+        }
+
+        std::size_t p = 0;
+        while (p < ephemeral_key_length && !S[p])
+            p++;
+
+        if (p & 1)
+            p++;
+        p /= 2;
+
+        const SHA1::Digest hash0 = SHA1::digest_of(buffer0.data() + p, ephemeral_key_length / 2 - p);
+        const SHA1::Digest hash1 = SHA1::digest_of(buffer1.data() + p, ephemeral_key_length / 2 - p);
+
+        SessionKey key;
+        for (size_t i = 0; i < SHA1::disgest_length; i++)
+        {
+            key[2 * i + 0] = hash0[i];
+            key[2 * i + 1] = hash1[i];
+        }
+        return key;
     }
 } // namespace Crypto

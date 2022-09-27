@@ -44,7 +44,8 @@ namespace Crypto
     template <Details::GenericHash::HashCreator HashCreator, std::size_t DigestLength> class GenericHash
     {
     public:
-        using Digest = std::array<std::uint8_t, DigestLength>;
+        static constexpr size_t disgest_length = DigestLength;
+        using Digest = std::array<std::uint8_t, disgest_length>;
 
         GenericHash() : m_context(Details::GenericHash::make_context())
         {
@@ -133,7 +134,7 @@ namespace Crypto
             std::uint32_t length;
             auto result = EVP_DigestFinal_ex(m_context, m_digest.data(), &length);
             assert(result == 1);
-            assert(length == DigestLength);
+            assert(length == disgest_length);
         }
     };
 
