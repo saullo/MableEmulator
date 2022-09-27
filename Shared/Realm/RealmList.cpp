@@ -15,11 +15,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include <Authentication/RealmList.hpp>
 #include <Database/AuthDatabase.hpp>
+#include <Realm/RealmList.hpp>
 #include <Utilities/Log.hpp>
 
-namespace Authentication
+namespace Realm
 {
     RealmList *RealmList::m_instance = nullptr;
 
@@ -163,4 +163,4 @@ namespace Authentication
         return build > max_pre_bc_client_build && build_info(build);
     }
 
-} // namespace Authentication
+} // namespace Realm

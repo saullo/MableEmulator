@@ -15,11 +15,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include <Authentication/Realm.hpp>
+#include <Realm/Realm.hpp>
 #include <boost/asio/ip/network_v4.hpp>
 #include <boost/asio/ip/tcp.hpp>
 
-namespace Authentication
+namespace Realm
 {
     boost::asio::ip::basic_endpoint<boost::asio::ip::tcp> Realm::address_for_client(
         const boost::asio::ip::address &client_address) const
@@ -44,4 +44,4 @@ namespace Authentication
         }
         return boost::asio::ip::basic_endpoint<boost::asio::ip::tcp>(realm_ip, port);
     }
-} // namespace Authentication
+} // namespace Realm

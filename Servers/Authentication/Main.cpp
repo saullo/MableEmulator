@@ -15,9 +15,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include <Authentication/RealmList.hpp>
 #include <Authentication/Session.hpp>
 #include <Database/AuthDatabase.hpp>
+#include <Realm/RealmList.hpp>
 #include <Utilities/Log.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
@@ -58,7 +58,7 @@ int main()
 
         boost::asio::io_context io_context(1);
 
-        auto realm_list = Authentication::RealmList::instance();
+        auto realm_list = Realm::RealmList::instance();
         realm_list->init(io_context);
 
         boost::asio::co_spawn(io_context,

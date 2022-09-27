@@ -15,9 +15,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include <Authentication/RealmList.hpp>
 #include <Authentication/Session.hpp>
 #include <Database/AuthDatabase.hpp>
+#include <Realm/RealmList.hpp>
 #include <boost/lexical_cast.hpp>
 
 namespace Authentication
@@ -99,7 +99,7 @@ namespace Authentication
         buffer << std::uint8_t(cmd_auth_logon_challenge);
         buffer << std::uint8_t(0x00);
 
-        if (!RealmList::instance()->build_info(m_build))
+        if (!Realm::RealmList::instance()->build_info(m_build))
         {
             buffer << std::uint8_t(login_version_invalid);
             send_packet(buffer);
@@ -226,7 +226,7 @@ namespace Authentication
 
         Utilities::ByteBuffer realmlist_buffer;
         std::size_t realmlist_size = 0;
-        auto realm_list = RealmList::instance();
+        auto realm_list = Realm::RealmList::instance();
         for (const auto &realm_map : realm_list->realms())
         {
             const auto &realm = realm_map.second;
@@ -237,13 +237,13 @@ namespace Authentication
             {
                 if (!build_info)
                     continue;
-                flags |= realmflag_offline | realmflag_specifybuild;
+                flags |= Realm::realmflag_offline | Realm::realmflag_specifybuild;
             }
             if (!build_info)
-                flags &= ~realmflag_specifybuild;
+                flags &= ~Realm::realmflag_specifybuild;
 
             auto name = realm.name;
-            if (m_expansion & expansion_flag_pre_bc && flags & realmflag_specifybuild)
+            if (m_expansion & expansion_flag_pre_bc && flags & Realm::realmflag_specifybuild)
                 name = fmt::format("{} ({}.{}.{})", name, build_info->major, build_info->minor, build_info->revision);
 
             if (m_expansion & expansion_flag_post_bc)
@@ -264,7 +264,7 @@ namespace Authentication
             else
                 realmlist_buffer << std::uint8_t(0x00);
 
-            if (m_expansion & expansion_flag_post_bc && flags & realmflag_specifybuild)
+            if (m_expansion & expansion_flag_post_bc && flags & Realm::realmflag_specifybuild)
             {
                 realmlist_buffer << std::uint8_t(build_info->major);
                 realmlist_buffer << std::uint8_t(build_info->minor);
@@ -321,7 +321,7 @@ namespace Authentication
 
     std::uint8_t Session::calculate_expansion_version(std::uint32_t build)
     {
-        auto realm_list = RealmList::instance();
+        auto realm_list = Realm::RealmList::instance();
         if (realm_list->is_pre_bc_client(build))
             return expansion_flag_pre_bc;
         if (realm_list->is_post_bc_client(build))

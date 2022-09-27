@@ -24,7 +24,7 @@
 #include <memory>
 #include <string>
 
-namespace Authentication
+namespace Realm
 {
     enum RealmType
     {
@@ -64,4 +64,4 @@ namespace Authentication
         boost::asio::ip::basic_endpoint<boost::asio::ip::tcp> address_for_client(
             const boost::asio::ip::address &client_address) const;
     };
-} // namespace Authentication
+} // namespace Realm

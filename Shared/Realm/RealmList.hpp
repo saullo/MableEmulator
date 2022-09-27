@@ -17,13 +17,13 @@
  */
 #pragma once
 
-#include <Authentication/Realm.hpp>
 #include <Network/Resolver.hpp>
+#include <Realm/Realm.hpp>
 #include <boost/asio/deadline_timer.hpp>
 #include <map>
 #include <vector>
 
-namespace Authentication
+namespace Realm
 {
     class RealmList
     {
@@ -63,4 +63,4 @@ namespace Authentication
         void init_builds();
         void update_realms(boost::system::error_code error);
     };
-} // namespace Authentication
+} // namespace Realm
