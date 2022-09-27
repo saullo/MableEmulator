@@ -30,6 +30,9 @@ namespace Database
         friend class ResultSet;
 
     public:
+        float get_float();
+        std::uint8_t get_uint8();
+        std::uint16_t get_uint16();
         std::uint32_t get_uint32();
         std::string get_string() const;
         const char *get_c_string() const;

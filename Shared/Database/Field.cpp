@@ -22,6 +22,36 @@
 
 namespace Database
 {
+    float Field::get_float()
+    {
+        if (!m_data.value)
+            return 0.0f;
+
+        if (m_data.is_raw)
+            return *reinterpret_cast<const float *>(m_data.value);
+        return static_cast<float>(std::atof(m_data.value));
+    }
+
+    std::uint8_t Field::get_uint8()
+    {
+        if (m_data.value)
+            return 0;
+
+        if (m_data.is_raw)
+            return *reinterpret_cast<const std::uint8_t *>(m_data.value);
+        return static_cast<std::uint8_t>(std::strtoul(m_data.value, nullptr, 10));
+    }
+
+    std::uint16_t Field::get_uint16()
+    {
+        if (!m_data.value)
+            return 0;
+
+        if (m_data.is_raw)
+            return *reinterpret_cast<const std::uint16_t *>(m_data.value);
+        return static_cast<std::uint16_t>(std::strtoul(m_data.value, nullptr, 10));
+    }
+
     std::uint32_t Field::get_uint32()
     {
         if (!m_data.value)
