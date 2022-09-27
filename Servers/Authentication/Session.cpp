@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include <Authentication/RealmList.hpp>
 #include <Authentication/Session.hpp>
 #include <Database/AuthDatabase.hpp>
 #include <Utilities/Log.hpp>
@@ -173,7 +174,7 @@ namespace Authentication
         buffer << cmd_auth_logon_challenge;
         buffer << std::uint8_t(0x00);
 
-        if (!build_is_valid(challenge->build))
+        if (!RealmList::instance()->build_info(challenge->build))
         {
             buffer << login_version_invalid;
             send_packet(buffer);
@@ -213,32 +214,6 @@ namespace Authentication
 
         send_packet(buffer);
         return true;
-    }
-
-    bool Session::build_is_valid(std::uint16_t build_number)
-    {
-        std::vector<BuildInformation> builds;
-
-        if (auto query = Database::AuthDatabase::instance()->query(
-                "SELECT build, major, minor, revision FROM build_information"))
-        {
-            do
-            {
-                auto fields = query->fetch();
-                auto &build = builds.emplace_back();
-                build.build = fields[0].get_uint32();
-                build.major = fields[1].get_uint32();
-                build.minor = fields[2].get_uint32();
-                build.revision = fields[3].get_uint32();
-            } while (query->next_row());
-        }
-
-        for (const auto &build : builds)
-        {
-            if (build.build == build_number)
-                return true;
-        }
-        return false;
     }
 
     bool Session::logon_proof_handler()

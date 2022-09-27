@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include <Authentication/RealmList.hpp>
 #include <Authentication/Session.hpp>
 #include <Database/AuthDatabase.hpp>
 #include <Utilities/Log.hpp>
@@ -50,11 +51,16 @@ int main()
         DefaultProvider = OSSL_PROVIDER_load(nullptr, "default");
 #endif
 
+        Utilities::Log::init();
+
         auto auth_database = Database::AuthDatabase::instance();
         auth_database->open();
 
-        Utilities::Log::init();
         boost::asio::io_context io_context(1);
+
+        auto realm_list = Authentication::RealmList::instance();
+        realm_list->init(io_context);
+
         boost::asio::co_spawn(io_context,
                               listener(boost::asio::ip::tcp::acceptor(io_context, {boost::asio::ip::tcp::v4(), 3724})),
                               boost::asio::detached);

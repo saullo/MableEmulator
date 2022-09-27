@@ -1,6 +1,8 @@
 set(SOURCES
     Main.cpp
-    Session.cpp)
+    Session.cpp
+    Realm.cpp
+    RealmList.cpp)
 
 add_executable(AuthenticationServer ${SOURCES})
 target_link_libraries(AuthenticationServer Database Crypto)

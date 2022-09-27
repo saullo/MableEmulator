@@ -59,14 +59,6 @@ namespace Authentication
             bool (Session::*handler)();
         };
 
-        struct BuildInformation
-        {
-            std::uint32_t build;
-            std::uint32_t major;
-            std::uint32_t minor;
-            std::uint32_t revision;
-        };
-
 #pragma pack(push, 1)
         typedef struct
         {
