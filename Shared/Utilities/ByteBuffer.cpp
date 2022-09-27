@@ -67,4 +67,10 @@ namespace Utilities
         m_write_pos = new_size;
     }
 
+    void ByteBuffer::resize(std::size_t new_size)
+    {
+        m_data.resize(new_size, 0);
+        m_read_pos = 0;
+        m_write_pos = size();
+    }
 } // namespace Utilities

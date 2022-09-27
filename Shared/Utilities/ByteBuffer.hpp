@@ -41,6 +41,8 @@ namespace Utilities
             append(value.data(), Size);
         }
 
+        void resize(std::size_t new_size);
+
     private:
         static constexpr auto initial_size = 4096;
 
