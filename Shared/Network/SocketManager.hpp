@@ -70,6 +70,8 @@ namespace Network
         }
 
     protected:
+        auto thread_count() const { return m_thread_count; }
+
         AsyncAcceptor *m_acceptor{nullptr};
 
         virtual Thread<SocketType> *create_threads() const = 0;
