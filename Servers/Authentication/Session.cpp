@@ -192,7 +192,6 @@ namespace Authentication
             return false;
         }
 
-        account_query->next_row();
         auto fields = account_query->fetch();
 
         m_srp6.emplace(fields[0].get_string(), fields[1].get_binary<Crypto::Srp6::salt_length>(),
