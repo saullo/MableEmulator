@@ -51,6 +51,13 @@ namespace Authentication
             login_version_invalid = 0x09,
         };
 
+        enum ExpansionFlags
+        {
+            expansion_flag_invalid = 0x00,
+            expansion_flag_pre_bc = 0x01,
+            expansion_flag_post_bc = 0x02,
+        };
+
         struct Handler
         {
             Command command;
@@ -103,17 +110,30 @@ namespace Authentication
             std::uint8_t result;
             Crypto::SHA1::Digest server_proof;
             std::uint32_t hardware_survey_id;
-        } cmd_auth_logon_proof_server_t;
-        static_assert(sizeof(cmd_auth_logon_proof_server_t) == (1 + 1 + 20 + 4));
+        } cmd_auth_logon_proof_server_pre_t;
+        static_assert(sizeof(cmd_auth_logon_proof_server_pre_t) == (1 + 1 + 20 + 4));
+
+        typedef struct
+        {
+            std::uint8_t command;
+            std::uint8_t result;
+            Crypto::SHA1::Digest server_proof;
+            std::uint32_t account_flag;
+            std::uint32_t hardware_survey_id;
+            std::uint16_t unknown_flags;
+        } cmd_auth_logon_proof_server_pos_t;
+        static_assert(sizeof(cmd_auth_logon_proof_server_pos_t) == (1 + 1 + 20 + 4 + 4 + 2));
 #pragma pack(pop)
         std::uint16_t m_build{0};
         std::optional<Crypto::Srp6> m_srp6;
         Crypto::Srp6::SessionKey m_session_key{};
         Account m_account{};
+        std::uint8_t m_expansion{expansion_flag_invalid};
 
         bool logon_challenge_handler();
         bool logon_proof_handler();
         bool realmlist_handler();
         void send_packet(Utilities::ByteBuffer &packet);
+        std::uint8_t calculate_expansion_version(std::uint32_t build);
     };
 } // namespace Authentication

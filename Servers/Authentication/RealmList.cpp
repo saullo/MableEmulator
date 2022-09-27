@@ -134,4 +134,15 @@ namespace Authentication
             } while (query->next_row());
         }
     }
+
+    bool RealmList::is_pre_bc_client(std::uint32_t build)
+    {
+        return build <= max_pre_bc_client_build && build_info(build);
+    }
+
+    bool RealmList::is_post_bc_client(std::uint32_t build)
+    {
+        return build > max_pre_bc_client_build && build_info(build);
+    }
+
 } // namespace Authentication

@@ -43,7 +43,11 @@ namespace Authentication
         void init(boost::asio::io_context &io_context);
         const BuildInformation *build_info(std::uint32_t build);
 
+        bool is_pre_bc_client(std::uint32_t build);
+        bool is_post_bc_client(std::uint32_t build);
+
     private:
+        static constexpr auto max_pre_bc_client_build = 6141;
         static RealmList *m_instance;
 
         std::vector<BuildInformation> m_builds;

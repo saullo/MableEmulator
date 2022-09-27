@@ -57,6 +57,8 @@ namespace Authentication
                 return;
             }
 
+            LOG_DEBUG("Command = {}", command);
+
             auto size = std::uint16_t(handler.size);
             if (command == cmd_auth_logon_challenge)
             {
@@ -91,6 +93,7 @@ namespace Authentication
             return false;
 
         m_build = challenge->build;
+        m_expansion = calculate_expansion_version(m_build);
 
         Utilities::ByteBuffer buffer;
         buffer << std::uint8_t(cmd_auth_logon_challenge);
@@ -98,7 +101,7 @@ namespace Authentication
 
         if (!RealmList::instance()->build_info(m_build))
         {
-            buffer << login_version_invalid;
+            buffer << std::uint8_t(login_version_invalid);
             send_packet(buffer);
             return false;
         }
@@ -140,6 +143,12 @@ namespace Authentication
 
     bool Session::logon_proof_handler()
     {
+        if (m_expansion == expansion_flag_invalid)
+        {
+            LOG_DEBUG("Invalid client version, expansion = {}", m_expansion);
+            return false;
+        }
+
         auto logon_proof = reinterpret_cast<cmd_auth_logon_proof_client_t *>(read_buffer().read_ptr());
         if (auto key = m_srp6->verify_challenge(logon_proof->client_public_key, logon_proof->client_proof))
         {
@@ -162,15 +171,31 @@ namespace Authentication
             LOG_DEBUG("Successfully logged account username = {}, address = {}:{}", m_account.username,
                       remote_address().to_string(), remote_port());
 
-            cmd_auth_logon_proof_server_t proof;
-            proof.command = cmd_auth_logon_proof;
-            proof.result = 0;
-            proof.server_proof = server_proof;
-            proof.hardware_survey_id = 0x00;
-
             Utilities::ByteBuffer buffer;
-            buffer.resize(sizeof(proof));
-            std::memcpy(buffer.data(), &proof, sizeof(proof));
+            if (m_expansion & expansion_flag_post_bc)
+            {
+                cmd_auth_logon_proof_server_pos_t proof;
+                proof.command = cmd_auth_logon_proof;
+                proof.result = 0;
+                proof.server_proof = server_proof;
+                proof.account_flag = 0x00800000;
+                proof.hardware_survey_id = 0x00;
+                proof.unknown_flags = 0x00;
+
+                buffer.resize(sizeof(proof));
+                std::memcpy(buffer.data(), &proof, sizeof(proof));
+            }
+            else
+            {
+                cmd_auth_logon_proof_server_pre_t proof;
+                proof.command = cmd_auth_logon_proof;
+                proof.result = 0;
+                proof.server_proof = server_proof;
+                proof.hardware_survey_id = 0x00;
+
+                buffer.resize(sizeof(proof));
+                std::memcpy(buffer.data(), &proof, sizeof(proof));
+            }
 
             send_packet(buffer);
         }
@@ -196,7 +221,8 @@ namespace Authentication
         {
             const auto &realm = realm_map.second;
 
-            auto build_is_valid = m_build == realm.build;
+            auto build_is_valid = ((m_expansion & expansion_flag_post_bc) && m_build == realm.build) ||
+                                  ((m_expansion & expansion_flag_pre_bc) && !realm_list->is_pre_bc_client(realm.build));
 
             std::uint32_t flags = realm.flags;
             auto build_info = realm_list->build_info(realm.build);
@@ -210,27 +236,51 @@ namespace Authentication
                 flags &= ~realmflag_specifybuild;
 
             auto name = realm.name;
-            if (flags & realmflag_specifybuild)
+            if (m_expansion & expansion_flag_pre_bc && flags & realmflag_specifybuild)
                 name = fmt::format("{} ({}.{}.{})", name, build_info->major, build_info->minor, build_info->revision);
 
             realmlist_buffer << std::uint8_t(realm.type);
+            if (m_expansion & expansion_flag_post_bc)
+                realmlist_buffer << std::uint8_t(0x01);
             realmlist_buffer << std::uint8_t(flags);
             realmlist_buffer << name;
             realmlist_buffer << boost::lexical_cast<std::string>(realm.address_for_client(remote_address()));
             realmlist_buffer << float(realm.population);
-            realmlist_buffer << std::uint8_t(0);
-            realmlist_buffer << std::uint8_t(realm.category);
             realmlist_buffer << std::uint8_t(0x00);
+            realmlist_buffer << std::uint8_t(realm.category);
+            if (m_expansion & expansion_flag_post_bc)
+                realmlist_buffer << std::uint8_t(realm.id);
+            else
+                realmlist_buffer << std::uint8_t(0x00);
+
+            if (m_expansion & expansion_flag_post_bc && flags & realmflag_specifybuild)
+            {
+                realmlist_buffer << std::uint8_t(build_info->major);
+                realmlist_buffer << std::uint8_t(build_info->minor);
+                realmlist_buffer << std::uint8_t(build_info->revision);
+                realmlist_buffer << std::uint16_t(build_info->build);
+            }
 
             realmlist_size++;
         }
 
-        realmlist_buffer << std::uint8_t(0x00);
-        realmlist_buffer << std::uint8_t(0x02);
+        if (m_expansion & expansion_flag_post_bc)
+        {
+            realmlist_buffer << std::uint8_t(0x10);
+            realmlist_buffer << std::uint8_t(0x00);
+        }
+        else
+        {
+            realmlist_buffer << std::uint8_t(0x00);
+            realmlist_buffer << std::uint8_t(0x02);
+        }
 
         Utilities::ByteBuffer realmlist_size_buffer;
         realmlist_size_buffer << std::uint32_t(0x00);
-        realmlist_size_buffer << std::uint32_t(realmlist_size);
+        if (m_expansion & expansion_flag_post_bc)
+            realmlist_size_buffer << std::uint16_t(realmlist_size);
+        else
+            realmlist_size_buffer << std::uint32_t(realmlist_size);
 
         Utilities::ByteBuffer header_buffer;
         header_buffer << std::uint8_t(cmd_realmlist);
@@ -256,5 +306,15 @@ namespace Authentication
     {
         id = field[0].get_uint32();
         username = field[1].get_string();
+    }
+
+    std::uint8_t Session::calculate_expansion_version(std::uint32_t build)
+    {
+        auto realm_list = RealmList::instance();
+        if (realm_list->is_pre_bc_client(build))
+            return expansion_flag_pre_bc;
+        if (realm_list->is_post_bc_client(build))
+            return expansion_flag_post_bc;
+        return expansion_flag_invalid;
     }
 } // namespace Authentication
