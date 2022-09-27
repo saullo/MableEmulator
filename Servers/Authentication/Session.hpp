@@ -33,16 +33,18 @@ namespace Authentication
         void on_read() override;
 
     private:
+        static constexpr auto realmlist_packet_size = 5;
         static constexpr auto logon_challenge_initial_size = 4;
         static std::array<std::uint8_t, 16> version_challenge;
 
-        enum Command : std::uint8_t
+        enum Command
         {
             cmd_auth_logon_challenge = 0x00,
             cmd_auth_logon_proof = 0x01,
+            cmd_realmlist = 0x10
         };
 
-        enum Result : std::uint8_t
+        enum Result
         {
             login_ok = 0x00,
             login_unknown_account = 0x04,
@@ -111,6 +113,7 @@ namespace Authentication
 
         bool logon_challenge_handler();
         bool logon_proof_handler();
+        bool realmlist_handler();
         void send_packet(Utilities::ByteBuffer &packet);
     };
 } // namespace Authentication

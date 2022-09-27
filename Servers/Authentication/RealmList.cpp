@@ -70,7 +70,7 @@ namespace Authentication
         if (auto query =
                 Database::AuthDatabase::instance()->query("SELECT id, name, address, local_address, local_subnet_mask, "
                                                           "port, type, flags, category, population, build FROM "
-                                                          "realmlist"))
+                                                          "realmlist WHERE flags <> 3"))
         {
             do
             {
@@ -107,6 +107,10 @@ namespace Authentication
 
                 auto port = fields[5].get_uint16();
                 auto type = fields[6].get_uint8();
+                if (type == realmtype_ffa_pvp)
+                    type = realmtype_pvp;
+                if (type >= realmtype_max_client)
+                    type = realmtype_normal;
                 auto flags = fields[7].get_uint8();
                 auto category = fields[8].get_uint8();
                 auto population = fields[9].get_float();
@@ -125,6 +129,8 @@ namespace Authentication
                 realm.population = population;
                 realm.build = build;
 
+                LOG_DEBUG("Added realm name = {}, type = {}, flags = {}, population = {}, category = {}", realm.name,
+                          realm.type, realm.flags, realm.population, realm.category);
             } while (query->next_row());
         }
     }

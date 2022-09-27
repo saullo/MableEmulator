@@ -18,6 +18,7 @@
 #include <Authentication/RealmList.hpp>
 #include <Authentication/Session.hpp>
 #include <Database/AuthDatabase.hpp>
+#include <boost/lexical_cast.hpp>
 
 namespace Authentication
 {
@@ -32,7 +33,8 @@ namespace Authentication
     {
         Handler command_handlers[] = {
             {cmd_auth_logon_challenge, logon_challenge_initial_size, &Session::logon_challenge_handler},
-            {cmd_auth_logon_proof, sizeof(cmd_auth_logon_proof_client_t), &Session::logon_proof_handler}};
+            {cmd_auth_logon_proof, sizeof(cmd_auth_logon_proof_client_t), &Session::logon_proof_handler},
+            {cmd_realmlist, realmlist_packet_size, &Session::realmlist_handler}};
         auto handlers_size = sizeof(command_handlers) / sizeof(Handler);
 
         auto &buffer = read_buffer();
@@ -91,7 +93,7 @@ namespace Authentication
         m_build = challenge->build;
 
         Utilities::ByteBuffer buffer;
-        buffer << cmd_auth_logon_challenge;
+        buffer << std::uint8_t(cmd_auth_logon_challenge);
         buffer << std::uint8_t(0x00);
 
         if (!RealmList::instance()->build_info(m_build))
@@ -143,6 +145,17 @@ namespace Authentication
         {
             m_session_key = *key;
 
+            auto sent_token = (logon_proof->security_flags & 0x04);
+            if (sent_token)
+            {
+                Utilities::ByteBuffer buffer;
+                buffer << std::uint8_t(cmd_auth_logon_proof);
+                buffer << std::uint8_t(login_unknown_account);
+                buffer << std::uint16_t(0x0);
+                send_packet(buffer);
+                return true;
+            }
+
             auto server_proof = Crypto::Srp6::session_verifier(logon_proof->client_public_key,
                                                                logon_proof->client_proof, m_session_key);
 
@@ -164,11 +177,68 @@ namespace Authentication
         else
         {
             Utilities::ByteBuffer buffer;
-            buffer << cmd_auth_logon_proof;
-            buffer << login_unknown_account;
+            buffer << std::uint8_t(cmd_auth_logon_proof);
+            buffer << std::uint8_t(login_unknown_account);
             buffer << std::uint16_t(0);
             send_packet(buffer);
         }
+        return true;
+    }
+
+    bool Session::realmlist_handler()
+    {
+        std::map<std::uint32_t, std::uint8_t> characters;
+
+        Utilities::ByteBuffer realmlist_buffer;
+        std::size_t realmlist_size = 0;
+        auto realm_list = RealmList::instance();
+        for (const auto &realm_map : realm_list->realms())
+        {
+            const auto &realm = realm_map.second;
+
+            auto build_is_valid = m_build == realm.build;
+
+            std::uint32_t flags = realm.flags;
+            auto build_info = realm_list->build_info(realm.build);
+            if (!build_is_valid)
+            {
+                if (!build_info)
+                    continue;
+                flags |= realmflag_offline | realmflag_specifybuild;
+            }
+            if (!build_info)
+                flags &= ~realmflag_specifybuild;
+
+            auto name = realm.name;
+            if (flags & realmflag_specifybuild)
+                name = fmt::format("{} ({}.{}.{})", name, build_info->major, build_info->minor, build_info->revision);
+
+            realmlist_buffer << std::uint8_t(realm.type);
+            realmlist_buffer << std::uint8_t(flags);
+            realmlist_buffer << name;
+            realmlist_buffer << boost::lexical_cast<std::string>(realm.address_for_client(remote_address()));
+            realmlist_buffer << float(realm.population);
+            realmlist_buffer << std::uint8_t(0);
+            realmlist_buffer << std::uint8_t(realm.category);
+            realmlist_buffer << std::uint8_t(0x00);
+
+            realmlist_size++;
+        }
+
+        realmlist_buffer << std::uint8_t(0x00);
+        realmlist_buffer << std::uint8_t(0x02);
+
+        Utilities::ByteBuffer realmlist_size_buffer;
+        realmlist_size_buffer << std::uint32_t(0x00);
+        realmlist_size_buffer << std::uint32_t(realmlist_size);
+
+        Utilities::ByteBuffer header_buffer;
+        header_buffer << std::uint8_t(cmd_realmlist);
+        header_buffer << std::uint16_t(realmlist_buffer.size() + realmlist_size_buffer.size());
+        header_buffer.append(realmlist_size_buffer);
+        header_buffer.append(realmlist_buffer);
+        send_packet(header_buffer);
+
         return true;
     }
 

@@ -26,7 +26,15 @@
 
 namespace Authentication
 {
-    enum RealmFlags : std::uint32_t
+    enum RealmType
+    {
+        realmtype_normal = 0,
+        realmtype_pvp = 1,
+        realmtype_max_client = 14,
+        realmtype_ffa_pvp = 16
+    };
+
+    enum RealmFlags
     {
         realmflag_none = 0x00,
         realmflag_version_mismatch = 0x01,
